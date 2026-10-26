@@ -38,12 +38,6 @@ export function matchWishlistOwners(active: WishlistProfile, candidates: Wishlis
     .sort((a, b) => a.lock.name.localeCompare(b.lock.name));
 }
 
-export function ownerCsvCell(value: string | number) {
-  let text = String(value);
-  if (/^[\s]*[=+@-]/.test(text)) text = `'${text}`;
-  return `"${text.replaceAll('"', '""')}"`;
-}
-
 export type WishlistSort = {
   key: "lock" | "rank" | "owners" | "demand";
   direction: "asc" | "desc";
@@ -76,69 +70,4 @@ export function sortWishlistRows(
             : a.owners.length - b.owners.length;
     return (sort.direction === "asc" ? primary : -primary) || compareLocks(a.lock, b.lock);
   });
-}
-
-export function wishlistOwnersCsv(
-  active: WishlistProfile,
-  loaded: WishlistProfile[],
-  totalProfiles: number,
-  failedNames: string[],
-  searchScope = "Added profiles",
-  leaderboardUpdatedAt = "",
-  sort: WishlistSort = { key: "lock", direction: "asc" },
-  demand?: { counts: Record<string, number>; updatedAt: string },
-) {
-  const rows: (string | number)[][] = [
-    [
-      "Wishlist profile",
-      "Wishlist profile ID",
-      "Lock",
-      "Version",
-      "Lock ID",
-      "Belt",
-      "Owner count",
-      "Published wishlist count",
-      "Owner name",
-      "Owner profile ID",
-      "Owner profile URL",
-      "Owner refreshed at",
-      "Wishlist refreshed at",
-      "Profiles loaded",
-      "Profiles searched (excluding active)",
-      "Failed profiles",
-      "Search scope",
-      "Leaderboard updated at (source time)",
-      "Wishlist demand source updated at",
-    ],
-  ];
-  const loadedCount = new Set(loaded.filter((p) => p.id !== active.id).map((p) => p.id)).size;
-  for (const { lock, owners } of sortWishlistRows(
-    matchWishlistOwners(active, loaded),
-    sort,
-    demand?.counts,
-  )) {
-    const common = [
-      active.name,
-      active.id,
-      lock.name,
-      lock.version ?? "",
-      lock.id,
-      lock.beltLevel ?? lock.belt,
-      owners.length,
-      demand ? (demand.counts[lock.id] ?? 0) : "Not loaded",
-    ];
-    const coverage = [
-      active.refreshedAt,
-      loadedCount,
-      totalProfiles,
-      failedNames.join("; "),
-      searchScope,
-      leaderboardUpdatedAt,
-      demand?.updatedAt ?? "Not loaded",
-    ];
-    if (!owners.length)
-      rows.push([...common, "No matches among loaded profiles", "", "", "", ...coverage]);
-    for (const p of owners) rows.push([...common, p.name, p.id, p.url, p.refreshedAt, ...coverage]);
-  }
-  return "\uFEFF" + rows.map((row) => row.map(ownerCsvCell).join(",")).join("\r\n");
 }

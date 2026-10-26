@@ -76,6 +76,8 @@ jobs:
       - name: Validate source
         run: npm run lint
 
+      - name: Check types and regression tests
+        run: npm run typecheck && npm test
       - name: Build GitHub Pages site
         run: npm run build:pages
         env:

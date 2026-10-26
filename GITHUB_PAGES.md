@@ -64,7 +64,7 @@ Every push starts `.github/workflows/pages.yml` and republishes the Pages site. 
 
 `.github/workflows/refresh-profile.yml` checks Todd’s public LPU profile every day at 8:00 AM in `America/New_York`. It runs at the correct local hour through Eastern daylight-saving changes.
 
-The workflow reads the public LPU profile and catalog, regenerates `app/data.ts`, validates the static build, and commits only when the profile changed. That commit automatically starts the Pages deployment workflow.
+The workflow reads the public LPU profile and catalog, regenerates `app/data.ts`, validates the static build, and commits only when the profile changed. The refresh workflow deploys its validated artifact directly; commits made with `GITHUB_TOKEN` do not start another push workflow. Both deployment workflows reject stale build artifacts.
 
 After pushing the repository:
 
@@ -94,7 +94,7 @@ The finished static files are written to `dist-pages/`. Do not commit that folde
 
 ## Troubleshooting
 
-- **404 after deployment:** Confirm **Settings → Pages → Source** is set to **GitHub Actions**. Open **Actions → Deploy GitHub Pages**, rerun the workflow, and use the exact URL shown by the completed `deploy` job. The workflow verifies that `index.html` is at the root of the uploaded Pages artifact.
+- **404 after deployment:** Confirm **Settings → Pages → Source** is set to **GitHub Actions**. Open **Actions → Deploy GitHub Pages**, select **Run workflow** on the default branch, and use the exact URL shown by the completed `deploy` job. The workflow verifies that `index.html` is at the root of the uploaded Pages artifact.
 - **Blank page or missing styles:** Confirm the full repository was pushed, including `vite.github-pages.config.ts` and `github-pages/`.
 - **Workflow fails during install:** Use Node.js 22 locally and commit `package-lock.json`.
 - **Changes are not visible:** Check the latest workflow in the **Actions** tab and hard-refresh after it succeeds.

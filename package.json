@@ -10,18 +10,20 @@
     "refresh:data": "node scripts/refresh-profile.mjs",
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint app github-pages scripts next.config.ts vite.config.ts vite.github-pages.config.ts --format=github",
-    "format": "oxfmt"
+    "format": "oxfmt",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/test-profile-loading.cjs && node scripts/test-owner-loading.cjs && node scripts/test-screen-navigation.cjs && node scripts/test-wishlist-export.cjs && node services/lpu-profile-relay/scripts/test-relay.mjs && node scripts/test-audit-regressions.cjs"
   },
   "dependencies": {
-    "react": "19.2.6",
-    "react-dom": "19.2.6",
-    "react-server-dom-webpack": "19.2.6",
-    "vinext": "1.0.0-beta.5",
-    "fflate": "0.7.5"
+    "fflate": "0.7.5",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-server-dom-webpack": "19.2.8",
+    "vinext": "1.0.0-beta.5"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.37.1",
-    "@cloudflare/workers-types": "4.20260515.1",
+    "@cloudflare/vite-plugin": "1.65.0",
+    "@cloudflare/workers-types": "5.20261026.1",
     "@openai/sites-vite-plugin": "0.2.0",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
@@ -29,12 +31,16 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
     "@vitejs/plugin-rsc": "0.5.26",
-    "oxfmt": "0.61.0",
+    "oxfmt": "0.74.0",
     "oxlint": "1.76.0",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3",
-    "vite": "8.0.13",
-    "wrangler": "4.92.0"
+    "vite": "8.3.5",
+    "wrangler": "4.152.0"
+  },
+  "overrides": {
+    "image-size": "2.0.3",
+    "undici": "7.30.1"
   },
   "engines": {
     "node": ">=22.13.0"

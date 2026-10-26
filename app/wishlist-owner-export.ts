@@ -57,7 +57,9 @@ const matchWidths = [
 ];
 type Style = keyof typeof exportStyles.styles;
 type Cell = { value: string | number; formula?: string; style?: Style };
+// XML 1.0 excludes these control characters; retain tab, newline and carriage return.
 const text = (value: unknown) =>
+  // oxlint-disable-next-line no-control-regex
   String(value ?? "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "");
 const escape = (value: unknown) =>
   text(value)

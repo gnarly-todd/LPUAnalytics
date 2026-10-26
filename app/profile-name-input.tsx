@@ -15,7 +15,10 @@ let directoryPromise: Promise<DirectoryProfile[]> | undefined;
 async function getDirectory() {
   // Only public directory metadata is downloaded. Collection data is fetched
   // later for the exact profile the visitor explicitly selects.
-  directoryPromise ??= fetch(PROFILE_DIRECTORY_URL, { headers: { Accept: "application/json" } })
+  directoryPromise ??= fetch(PROFILE_DIRECTORY_URL, {
+    headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(25_000),
+  })
     .then(async (response) => {
       if (!response.ok)
         throw new Error(

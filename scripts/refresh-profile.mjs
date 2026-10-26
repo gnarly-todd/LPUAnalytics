@@ -9,6 +9,7 @@ const DATA_FILE = new URL("../app/data.ts", import.meta.url);
 async function getText(url) {
   const response = await fetch(url, {
     headers: { "user-agent": "todd-lock-analytics-refresh/1.0" },
+    signal: AbortSignal.timeout(30_000),
   });
   if (!response.ok) throw new Error(`Request failed (${response.status}): ${url}`);
   return response.text();
@@ -46,11 +47,18 @@ if (profile.data?.userId !== PROFILE_ID) {
   throw new Error("LPU profile response did not match the configured user.");
 }
 const collections = profile.data.collections;
-if (!Array.isArray(collections?.picked)) {
-  throw new Error("LPU profile response is missing collections.picked.");
+if (
+  !["own", "wishlist", "picked"].every(
+    (key) =>
+      Array.isArray(collections?.[key]) && collections[key].every((id) => typeof id === "string"),
+  )
+) {
+  throw new Error(
+    "LPU profile response is missing valid own, wishlist or picked collections; the existing snapshot has been kept.",
+  );
 }
-const ownedIds = collectionStrings(collections.own);
-const wishlistIds = collectionStrings(collections.wishlist);
+const ownedIds = [...new Set(collectionStrings(collections.own))];
+const wishlistIds = [...new Set(collectionStrings(collections.wishlist))];
 const ownedSet = new Set(ownedIds);
 const pickedIds = collectionStrings(collections.picked).filter((id) => ownedSet.has(id));
 const selectedIds = new Set([...ownedIds, ...wishlistIds]);
@@ -63,9 +71,6 @@ if (selectedEntries.length !== selectedIds.size) {
   throw new Error(
     `LPU catalog mismatch: found ${selectedEntries.length} of ${selectedIds.size} selected locks.`,
   );
-}
-if (pickedIds.some((id) => !ownedIds.includes(id))) {
-  throw new Error("A picked lock is not marked owned; refusing to publish inconsistent data.");
 }
 
 const catalog = selectedEntries.map((entry) => {
@@ -84,7 +89,7 @@ const catalog = selectedEntries.map((entry) => {
 
 let source = await readFile(DATA_FILE, "utf8");
 const start = source.indexOf("const lockCatalog:");
-const end = source.indexOf("export const ownedLocks");
+const end = source.indexOf("// Keep the generated snapshot lean;");
 if (start < 0 || end < 0 || end <= start) {
   throw new Error("Could not find the generated profile-data section in app/data.ts.");
 }

@@ -589,14 +589,8 @@ select:focus-visible {
   cursor: wait;
 }
 
-.refresh-button.loading svg,
-.refresh-button.queued svg {
+.refresh-button.loading svg {
   animation: refresh-spin 850ms linear infinite;
-}
-
-.refresh-button.queued {
-  color: #5ee5a1;
-  border-color: rgba(94, 229, 161, 0.48);
 }
 
 .refresh-button.error {

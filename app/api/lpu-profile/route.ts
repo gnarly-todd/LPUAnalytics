@@ -47,6 +47,7 @@ type LpuUserResponse = {
 };
 
 let catalogPromise: Promise<LpuEntry[]> | undefined;
+let catalogExpiresAt = 0;
 
 // Coalesce simultaneous reads of the same public profile. Cache only successful
 // responses briefly; errors/private profiles are never cached as successes.
@@ -111,6 +112,10 @@ const javascript = (body: Record<string, unknown>, callback: string) => {
 };
 
 async function getCatalog() {
+  if (Date.now() >= catalogExpiresAt) {
+    catalogPromise = undefined;
+    catalogExpiresAt = Date.now() + 5 * 60 * 1000;
+  }
   catalogPromise ??= fetch(LPU_DATA, {
     headers: { "User-Agent": "todd-lock-analytics-profile-loader" },
     signal: AbortSignal.timeout(20_000),
@@ -244,7 +249,10 @@ export async function GET(request: Request) {
     if (
       !Array.isArray(collections?.picked) ||
       !Array.isArray(collections?.own) ||
-      !Array.isArray(collections?.wishlist)
+      !Array.isArray(collections?.wishlist) ||
+      ![collections.own, collections.wishlist, collections.picked].every((ids) =>
+        ids.every((id: unknown) => typeof id === "string"),
+      )
     ) {
       throw new Error("LPU profile response is missing collection data.");
     }

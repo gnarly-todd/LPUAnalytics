@@ -453,7 +453,7 @@ async function componentChecks() {
   assert.equal((html.match(/class="wishlist-mobile-card"/g) ?? []).length, 1);
   assert(html.includes("Excel exports all 230"));
   assert.equal(env.calls, calls);
-  button("Export Excel").props.onClick();
+  await button("Export Excel").props.onClick();
   const workbookFiles = unzipSync(new Uint8Array(await env.exports.at(-1).arrayBuffer()));
   const wishlistXml = strFromU8(workbookFiles["xl/worksheets/sheet1.xml"]);
   const matchesXml = strFromU8(workbookFiles["xl/worksheets/sheet2.xml"]);

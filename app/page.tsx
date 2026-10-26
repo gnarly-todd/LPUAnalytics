@@ -2,6 +2,7 @@
 
 import WishlistOwnerTable from "./wishlist-owner-table";
 import ProfileNameInput from "./profile-name-input";
+import { profileStorage } from "./profile-storage";
 import {
   HomeSummary,
   ScreenHeading,
@@ -54,7 +55,6 @@ import {
   profileCollectionsSnapshot,
   progression,
 } from "./data";
-const HOSTED_SITE_ORIGIN = "https://todd-lock-analytics.nicelife70117.chatgpt.site";
 const SOURCE_URL = "https://lpubelts.com/#/profile/84dULJFIN4bHIC1LxCiuvBCSqT43?name=todd";
 const LPU_DATA_URL =
   "https://raw.githubusercontent.com/Lockpickers-United/lpu-belt-explorer/main/apps/web/src/data/data.json";
@@ -158,7 +158,8 @@ function isStoredProfile(value: unknown): value is Omit<SavedProfile, "isDefault
     typeof candidate.id === "string" &&
     typeof candidate.name === "string" &&
     typeof candidate.url === "string" &&
-    isValidLpuProfileUrl(candidate.url)
+    isValidLpuProfileUrl(candidate.url) &&
+    new URL(candidate.url).hash.split("?")[0] === `#/profile/${candidate.id}`
   );
 }
 
@@ -273,6 +274,31 @@ function normalizeBelt(belt: string): { belt: Belt; beltLevel?: LockRecord["belt
   return { belt: beltOrder.includes(belt as Belt) ? (belt as Belt) : "Unranked" };
 }
 
+let catalogPromise: Promise<LpuCatalogEntry[]> | undefined;
+let catalogExpiresAt = 0;
+async function getProfileCatalog() {
+  if (!catalogPromise || Date.now() >= catalogExpiresAt) {
+    catalogExpiresAt = Date.now() + 5 * 60 * 1000;
+    catalogPromise = fetch(LPU_DATA_URL, {
+      cache: "no-cache",
+      signal: AbortSignal.timeout(20_000),
+    })
+      .then(async (response) => {
+        if (!response.ok)
+          throw new Error("The LPU lock catalog could not be loaded. Please try again.");
+        const catalog: unknown = await response.json();
+        if (!Array.isArray(catalog))
+          throw new Error("The LPU lock catalog returned an invalid response.");
+        return catalog as LpuCatalogEntry[];
+      })
+      .catch((error) => {
+        catalogPromise = undefined;
+        throw error;
+      });
+  }
+  return catalogPromise;
+}
+
 async function fetchLpuProfileFromGithubPages(profileUrl: string): Promise<LoadedProfile> {
   const parsed = new URL(profileUrl);
   const match = parsed.hash.match(/^#\/profile\/([A-Za-z0-9_-]{20,128})(?:\?.*)?$/);
@@ -281,7 +307,9 @@ async function fetchLpuProfileFromGithubPages(profileUrl: string): Promise<Loade
 
   const response = await fetchLpuUser(profileId).catch((error) => {
     if (error instanceof LpuRateLimitError) throw error;
-    throw new Error("The profile refresh service could not be reached. Your saved profile has been kept. Please try again shortly.");
+    throw new Error(
+      "The profile refresh service could not be reached. Your saved profile has been kept. Please try again shortly.",
+    );
   });
 
   if (response?.status === 404)
@@ -295,7 +323,10 @@ async function fetchLpuProfileFromGithubPages(profileUrl: string): Promise<Loade
   if (
     !Array.isArray(collections?.own) ||
     !Array.isArray(collections?.wishlist) ||
-    !Array.isArray(collections?.picked)
+    !Array.isArray(collections?.picked) ||
+    ![collections.own, collections.wishlist, collections.picked].every((ids) =>
+      ids.every((id: unknown) => typeof id === "string"),
+    )
   )
     throw new Error(
       "The LPU API returned incomplete collection data. Your saved snapshot has been kept.",
@@ -305,13 +336,7 @@ async function fetchLpuProfileFromGithubPages(profileUrl: string): Promise<Loade
   const ownedSet = new Set(ownedIds);
   const pickedIds = new Set(stringIds(collections?.picked).filter((id) => ownedSet.has(id)));
   const selectedIds = new Set([...ownedIds, ...wishlistIds]);
-  const catalogResponse = await fetch(LPU_DATA_URL, {
-    cache: "force-cache",
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!catalogResponse.ok)
-    throw new Error("The LPU lock catalog could not be loaded. Please try again.");
-  const catalog = (await catalogResponse.json()) as LpuCatalogEntry[];
+  const catalog = await getProfileCatalog();
   const selected = catalog.filter((entry) => selectedIds.has(entry.id));
   if (selected.length !== selectedIds.size)
     throw new Error("The profile references locks missing from the LPU catalog.");
@@ -321,7 +346,9 @@ async function fetchLpuProfileFromGithubPages(profileUrl: string): Promise<Loade
     id: profileId,
     name: profile.data.displayName?.trim() || fallbackName || "LPU profile",
     url: `https://lpubelts.com/#/profile/${profileId}`,
-    refreshedAt: formatNewYorkSnapshot(new Date(Number(response.headers.get("X-LPU-Fetched-At")) || Date.now())),
+    refreshedAt: formatNewYorkSnapshot(
+      new Date(Number(response.headers.get("X-LPU-Fetched-At")) || Date.now()),
+    ),
     collections: profileCollections(collections),
     locks: selected.map((entry) => ({
       id: entry.id,
@@ -379,7 +406,26 @@ function fetchLpuProfile(profileUrl: string): Promise<LoadedProfile> {
 }
 
 function readCachedProfile(profileId: string) {
-  return readProfileCache<LoadedProfile>(profileId);
+  const cached = readProfileCache<LoadedProfile>(profileId);
+  if (
+    !cached ||
+    typeof cached.name !== "string" ||
+    typeof cached.refreshedAt !== "string" ||
+    !isValidLpuProfileUrl(cached.url) ||
+    !cached.locks.every(
+      (lock) =>
+        lock &&
+        typeof lock.id === "string" &&
+        typeof lock.name === "string" &&
+        beltOrder.includes(lock.belt) &&
+        ["Owned", "Wishlist"].includes(lock.status) &&
+        typeof lock.picked === "boolean" &&
+        Array.isArray(lock.mechanisms) &&
+        lock.mechanisms.every((value) => typeof value === "string"),
+    )
+  )
+    return null;
+  return cached;
 }
 
 async function loadSavedProfile(saved: SavedProfile) {
@@ -1435,9 +1481,8 @@ function HomeContent() {
   const [surprise, setSurprise] = useState<LockRecord | null>(null);
   const [challengeRequest, setChallengeRequest] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [refreshState, setRefreshState] = useState<"idle" | "loading" | "queued" | "error">("idle");
+  const [refreshState, setRefreshState] = useState<"idle" | "loading" | "error">("idle");
   const [refreshMessage, setRefreshMessage] = useState("");
-  const [refreshCheckedAt, setRefreshCheckedAt] = useState<number | null>(null);
   const [displayedSnapshotDate, setDisplayedSnapshotDate] = useState(profileSnapshotDate);
   const [savedProfiles, setSavedProfiles] = useState<SavedProfile[]>([builtInDefaultProfile]);
   const [comparisonSelections, setComparisonSelections] = useState<string[]>([]);
@@ -1476,13 +1521,11 @@ function HomeContent() {
     let stored: Omit<SavedProfile, "isDefault">[] = [];
     try {
       const defaultOverride = JSON.parse(
-        window.localStorage.getItem(DEFAULT_PROFILE_OVERRIDE_KEY) || "null",
+        profileStorage.getItem(DEFAULT_PROFILE_OVERRIDE_KEY) || "null",
       ) as unknown;
       if (isStoredProfile(defaultOverride)) defaultSaved = { ...defaultOverride, isDefault: true };
 
-      const storedValue = JSON.parse(
-        window.localStorage.getItem(SAVED_PROFILES_KEY) || "[]",
-      ) as unknown;
+      const storedValue = JSON.parse(profileStorage.getItem(SAVED_PROFILES_KEY) || "[]") as unknown;
       if (Array.isArray(storedValue)) stored = storedValue.filter(isStoredProfile);
     } catch {
       stored = [];
@@ -1502,7 +1545,7 @@ function HomeContent() {
     let comparisonIds: string[] = [];
     try {
       const storedComparison = JSON.parse(
-        window.localStorage.getItem(COMPARISON_PROFILE_IDS_KEY) || "[]",
+        profileStorage.getItem(COMPARISON_PROFILE_IDS_KEY) || "[]",
       ) as unknown;
       if (Array.isArray(storedComparison)) {
         comparisonIds = storedComparison.filter(
@@ -1535,14 +1578,12 @@ function HomeContent() {
           .finally(() => setComparisonBusy(false));
       }
     } else if (comparisonIds.length === 1) {
-      window.localStorage.removeItem(COMPARISON_PROFILE_IDS_KEY);
+      profileStorage.removeItem(COMPARISON_PROFILE_IDS_KEY);
       setComparisonSelections([]);
     }
 
-    const storedActiveId = window.localStorage.getItem(ACTIVE_PROFILE_KEY);
+    const storedActiveId = profileStorage.getItem(ACTIVE_PROFILE_KEY);
     const selected = profiles.find((item) => item.id === storedActiveId) || defaultSaved;
-    window.localStorage.setItem(ACTIVE_PROFILE_KEY, selected.id);
-
     const cached = readCachedProfile(selected.id);
     if (cached) {
       setActiveProfile(cached);
@@ -1659,71 +1700,6 @@ function HomeContent() {
     return () => window.cancelAnimationFrame(frame);
   }, [challengeRequest, surprise]);
 
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    const refreshResult = url.searchParams.get("refresh");
-    if (!refreshResult) return;
-
-    const runId = url.searchParams.get("run_id");
-    let pollTimer: number | undefined;
-    let cancelled = false;
-
-    if (refreshResult === "queued" && runId && /^\d+$/.test(runId)) {
-      refreshActivity.start();
-      setRefreshState("queued");
-      setRefreshMessage("Profile refresh is running. This page will reload when it finishes.");
-
-      const checkRefresh = async () => {
-        try {
-          const statusUrl = `${HOSTED_SITE_ORIGIN}/api/refresh-status?run_id=${runId}`;
-          const response = await fetch(statusUrl, { headers: { Accept: "application/json" } });
-          const result = (await response.json()) as {
-            status?: string;
-            conclusion?: string | null;
-          };
-
-          if (!response.ok) throw new Error("Unable to check refresh status.");
-          setRefreshCheckedAt(Date.now());
-          if (result.status === "completed") {
-            refreshActivity.finish();
-            setRefreshState("idle");
-            if (result.conclusion === "success") {
-              setRefreshMessage("Refresh complete. Reloading the updated collection…");
-              setDisplayedSnapshotDate(formatNewYorkSnapshot());
-              window.setTimeout(() => window.location.reload(), 1200);
-            } else {
-              setRefreshState("error");
-              setRefreshMessage("The profile refresh workflow did not complete successfully.");
-            }
-            return;
-          }
-
-          if (!cancelled) pollTimer = window.setTimeout(checkRefresh, 3000);
-        } catch {
-          if (!cancelled) pollTimer = window.setTimeout(checkRefresh, 5000);
-        }
-      };
-
-      void checkRefresh();
-    } else {
-      setRefreshState("error");
-      setRefreshMessage(
-        refreshResult === "forbidden"
-          ? "This refresh control is limited to the site owner."
-          : "GitHub could not queue the refresh workflow. Try again shortly.",
-      );
-    }
-    url.searchParams.delete("refresh");
-    url.searchParams.delete("run_id");
-    url.searchParams.delete("destination");
-    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-
-    return () => {
-      cancelled = true;
-      if (pollTimer) window.clearTimeout(pollTimer);
-    };
-  }, []);
-
   const filteredLocks = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     const filtered = locks.filter((lock) => {
@@ -1811,7 +1787,7 @@ function HomeContent() {
     window.setTimeout(() => setCopied(false), 1800);
   };
   const refreshProfile = async () => {
-    if (profileLoading || refreshState === "loading" || refreshState === "queued") return;
+    if (profileLoading || refreshState === "loading") return;
     refreshActivity.start();
     setProfileMenuOpen(false);
     setRefreshState("loading");
@@ -1835,8 +1811,13 @@ function HomeContent() {
   };
 
   const selectProfile = (selected: SavedProfile) => {
-    window.localStorage.removeItem(COMPARISON_PROFILE_IDS_KEY);
-    window.localStorage.setItem(ACTIVE_PROFILE_KEY, selected.id);
+    profileStorage.removeItem(COMPARISON_PROFILE_IDS_KEY);
+    try {
+      profileStorage.setItem(ACTIVE_PROFILE_KEY, selected.id);
+    } catch (error) {
+      setLoadNotice((error as Error).message);
+      return;
+    }
     setProfileMenuOpen(false);
     window.location.reload();
   };
@@ -1851,7 +1832,12 @@ function HomeContent() {
 
     setComparisonSelections(nextSelections);
     if (nextSelections.length === 2) {
-      window.localStorage.setItem(COMPARISON_PROFILE_IDS_KEY, JSON.stringify(nextSelections));
+      try {
+        profileStorage.setItem(COMPARISON_PROFILE_IDS_KEY, JSON.stringify(nextSelections));
+      } catch (error) {
+        setLoadNotice((error as Error).message);
+        return;
+      }
       setProfileMenuOpen(false);
       window.location.hash = "#/compare";
       window.location.reload();
@@ -1859,7 +1845,7 @@ function HomeContent() {
   };
 
   const leaveComparison = (next: ScreenId) => {
-    window.localStorage.removeItem(COMPARISON_PROFILE_IDS_KEY);
+    profileStorage.removeItem(COMPARISON_PROFILE_IDS_KEY);
     setComparisonRequested(false);
     setComparisonProfiles(null);
     setComparisonSelections([]);
@@ -1871,7 +1857,7 @@ function HomeContent() {
   const exitComparison = () => leaveComparison("home");
 
   const saveAddedProfiles = (profiles: SavedProfile[]) => {
-    window.localStorage.setItem(
+    profileStorage.setItem(
       SAVED_PROFILES_KEY,
       JSON.stringify(
         profiles.filter((item) => !item.isDefault).map(({ id, name, url }) => ({ id, name, url })),
@@ -1883,17 +1869,27 @@ function HomeContent() {
     if (removed.isDefault) return;
 
     const remaining = savedProfiles.filter((item) => item.id !== removed.id);
+    try {
+      saveAddedProfiles(remaining);
+    } catch (error) {
+      setLoadNotice((error as Error).message);
+      return;
+    }
     setSavedProfiles(remaining);
-    saveAddedProfiles(remaining);
     removeProfileCache(removed.id);
     if (comparisonSelections.includes(removed.id)) {
-      window.localStorage.removeItem(COMPARISON_PROFILE_IDS_KEY);
+      profileStorage.removeItem(COMPARISON_PROFILE_IDS_KEY);
       setComparisonSelections([]);
     }
 
     if (profile.id === removed.id) {
       const defaultSlot = remaining.find((item) => item.isDefault) || builtInDefaultProfile;
-      window.localStorage.setItem(ACTIVE_PROFILE_KEY, defaultSlot.id);
+      try {
+        profileStorage.setItem(ACTIVE_PROFILE_KEY, defaultSlot.id);
+      } catch (error) {
+        setLoadNotice((error as Error).message);
+        return;
+      }
       setProfileMenuOpen(false);
       window.location.reload();
     }
@@ -1933,12 +1929,12 @@ function HomeContent() {
         throw new Error(`${loaded.name} is already in the profile list.`);
       }
 
-      const activeId = window.localStorage.getItem(ACTIVE_PROFILE_KEY);
+      const activeId = profileStorage.getItem(ACTIVE_PROFILE_KEY);
       let nextProfiles: SavedProfile[];
       let nextActiveId: string;
 
       if (editingProfile) {
-        window.localStorage.removeItem(COMPARISON_PROFILE_IDS_KEY);
+        profileStorage.removeItem(COMPARISON_PROFILE_IDS_KEY);
         const replacement: SavedProfile = {
           id: loaded.id,
           name: loaded.name,
@@ -1952,9 +1948,9 @@ function HomeContent() {
 
         if (editingProfile.isDefault) {
           if (loaded.id === DEFAULT_PROFILE_ID) {
-            window.localStorage.removeItem(DEFAULT_PROFILE_OVERRIDE_KEY);
+            profileStorage.removeItem(DEFAULT_PROFILE_OVERRIDE_KEY);
           } else {
-            window.localStorage.setItem(
+            profileStorage.setItem(
               DEFAULT_PROFILE_OVERRIDE_KEY,
               JSON.stringify({ id: loaded.id, name: loaded.name, url: loaded.url }),
             );
@@ -1977,7 +1973,7 @@ function HomeContent() {
       }
 
       saveAddedProfiles(nextProfiles);
-      window.localStorage.setItem(ACTIVE_PROFILE_KEY, nextActiveId);
+      profileStorage.setItem(ACTIVE_PROFILE_KEY, nextActiveId);
       writeProfileCache(loaded);
       if (addWithoutViewing) {
         setSavedProfiles(nextProfiles);
@@ -2001,7 +1997,7 @@ function HomeContent() {
     }
   };
 
-  const refreshInProgress = refreshState === "loading" || refreshState === "queued";
+  const refreshInProgress = refreshState === "loading";
   if (screen === "compare" && comparisonRequested) {
     return (
       <ComparisonPage
@@ -2067,7 +2063,7 @@ function HomeContent() {
                   <button
                     type="button"
                     onClick={() => void refreshProfile()}
-                    disabled={refreshState === "loading" || refreshState === "queued"}
+                    disabled={refreshState === "loading"}
                     role="menuitem"
                   >
                     <Icon name="refresh" size={16} />
@@ -2196,11 +2192,6 @@ function HomeContent() {
           <div className="profile-activity-summary">
             <ActivityStatus label="Profile load" timing={profileActivity.timing} />
             <ActivityStatus label="Profile refresh" timing={refreshActivity.timing} />
-            {refreshCheckedAt !== null && (
-              <p className="activity-stamps">
-                Refresh status fetched <DataTimestamp value={refreshCheckedAt} />
-              </p>
-            )}
           </div>
         )}
         {addProfileOpen && (
@@ -2310,7 +2301,7 @@ function HomeContent() {
               name={profile.name}
               owned={ownedLocks.length}
               wishlist={wishlistLocks.length}
-              picked={profileMetric(profile, "picked")}
+              picked={analytics.ownedPicked}
               mechanisms={mechanismCounts.length}
               refreshedAt={displayedSnapshotDate}
               loading={profileLoading}
@@ -2349,10 +2340,15 @@ function HomeContent() {
                 <button
                   className="primary-button"
                   onClick={() => {
-                    window.localStorage.setItem(
-                      COMPARISON_PROFILE_IDS_KEY,
-                      JSON.stringify(comparisonSelections),
-                    );
+                    try {
+                      profileStorage.setItem(
+                        COMPARISON_PROFILE_IDS_KEY,
+                        JSON.stringify(comparisonSelections),
+                      );
+                    } catch (error) {
+                      setLoadNotice((error as Error).message);
+                      return;
+                    }
                     window.location.reload();
                   }}
                 >

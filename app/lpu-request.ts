@@ -11,7 +11,11 @@ function readBudget(): Budget {
   try {
     if (typeof window !== "undefined") {
       const stored = JSON.parse(window.localStorage.getItem(STATE_KEY) || "null");
-      if (stored && Array.isArray(stored.attempts)) memory = stored;
+      if (stored && Array.isArray(stored.attempts))
+        memory = {
+          retryAt: Number.isFinite(stored.retryAt) ? stored.retryAt : 0,
+          attempts: stored.attempts,
+        };
     }
   } catch {
     /* In-memory protection still works when storage is unavailable. */
@@ -75,11 +79,13 @@ export async function fetchLpuUser(
     typeof window !== "undefined" &&
     window.location &&
     !window.location.hostname.endsWith("github.io");
+  if (!/^[A-Za-z0-9_-]{20,128}$/.test(id)) throw new Error("Enter a valid public LPU user ID.");
   const requestUrl = githubPages
     ? `https://todd-lpu-profile-relay.nicelife70117.chatgpt.site/api/lpu-user?userId=${encodeURIComponent(id)}`
     : proxied
       ? `/api/lpu-user?userId=${encodeURIComponent(id)}`
       : `https://api.lpubelts.com/api/v1/users/${encodeURIComponent(id)}`;
+  const timeout = proxied || githubPages ? 45_000 : 20_000;
   const attempts = proxied || githubPages ? 1 : 2; // Both relays already retry upstream failures.
   for (let attempt = 0; attempt < attempts; attempt++) {
     signal?.throwIfAborted();
@@ -93,8 +99,8 @@ export async function fetchLpuUser(
         headers: { Accept: "application/json" },
         cache: "no-store",
         signal: signal
-          ? AbortSignal.any([signal, AbortSignal.timeout(20_000)])
-          : AbortSignal.timeout(20_000),
+          ? AbortSignal.any([signal, AbortSignal.timeout(timeout)])
+          : AbortSignal.timeout(timeout),
       });
     } catch (error) {
       if (signal?.aborted) throw error;

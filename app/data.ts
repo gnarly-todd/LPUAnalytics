@@ -24,7 +24,7 @@ export type LockRecord = {
   };
 };
 
-export const profileSnapshotDate = "October 26, 2026 · 12:36 AM EDT";
+export const profileSnapshotDate = "October 26, 2026 · 1:21 AM EDT";
 
 export const profileCollectionsSnapshot: Record<string, string[]> = {"own":["901b35b2","2455f0ae","40f7d7c7","632f4069","74a00ae3","e1625c4d","2ae1e0b8","4f6bcdb7","c6529d9c","85d93eb1","959a6b9d","331c9d36","fb5a9eb7","c8259a23","45e3cde7","826c31e0","b13f4b57","d3ad5a73","b8350901","29ab2852","2ae6a691","104776ef","aeaa6a09","639c4f0b","3335df97","55053299","ab1e901f","e87f0ca2","d974b48f","efc01233","5c0d870b","ea1afad0","55511995","112d0034","f133510b","58307da0","779e7dcb","222bd1fa","b8350900","2484ce70","9ec8706c","171f76e9","2ff8a738","7168d463","37951bc4","9ca2c109","e35a3c91","a460c971","1459e2c6","bf8970de","366d5f50","5a6170fb","06a28ac7","d9e3829f","506b242a","35330d19","3198fffc","aee424c0","0b604114","cd0c2ff9","3c73c705","1d80c9bb","a1233156","5103e650","562e964e","13b06cba","71833308","f1e92541","d08aa492","dd764207","111062fc","814c5368","0b82681f","c942490e","ea1d1d8c","da09d849","e4bb0668","07034c0f","626da374","07bc680a"],"picked":["07034c0f","901b35b2","2455f0ae","40f7d7c7","632f4069","2ae1e0b8","fb5a9eb7","779e7dcb","959a6b9d","efc01233","562e964e"],"wishlist":["8d67f9b7","1ae40987","e957e0d6","73a718cb","32fa52a6","5b842c0e","1add3dd0","ebcb29b9","2801996f","aa7fc00e","9b94b1c0","c11aca1a","40e50dd4","ab9df828","c0af329b","0418a174","aec0c82d","a0ec1618","6e0bfdd2","37dc53bb","b0d2e04c","5e3397a9","dd1dd313","ef221c67","f3666121","ed9fa926","1f3a8ff9","71bce5b7","e8901d1c","8c2983b5","3fbd7b3d","9982c0eb","8f7f1830","6d754a0a","3dabf132","1be10736","e38d015b","9c627ebd","86e86a1d","93e4cf5f","3af2407a","9f613c4a","281aa393","d1272b9f","9da7a5f2","4a7db3c6","cf76cfde","3f73d2ce","f7452b9f","f1857cef","ccdbffbf","649eaebc","63a9a2b1","00cf7717","5cba063b","c6a14e93","3ca098da","f87db705","f29a212f","e718b140","5a4310d5","340154fa","6c0ec943","2db935ea","2181e10d","c4f942f0","c266d57b","3515caae","d005e7b8","08b5986d","5c2f5101","23c7988c","0684a655","74c225d1","49c381dc","95a9b042","97c2b9be","fe088de0","c1e91978","30a4fef5","bbce33e0","039a239f","8f004bf0","98ba98ae","8a0c4b07","93871dad","4cd09b3b","4ffe03a9","06ddb074","434b5b25","62520bea","fd2b533e","48323cde","1110ef61","16906a6c","8a65b956","6dd5a34b","e1e595b9","8307d77f","ebe9ee59","da8331ef","93c49314","33d6e0df","bc03135a","61247b32","33588917","58cbc037","7298a640","594b1a1c","7194cc26","f38cafca","9659ad59","1ee01369","f61461ed","41b91a0e","e0191c45","2efc9257","9375df98","660a840e","b8783269","848940e5","05f9773b","2bf9f60e","fd5a5246","5c5701d7","94ee12b7","b91890bf","18e1f45b","9d865bcd","87eaa964","e92d29ad","b29a8b44","e3bd3faf","9eb3e9c4","c640fe2c","9bb97454","7c6efd49","6b06f591","4993a918","265226b1","6852489f","00b569f2","03cbfaa5","9d7faa15","a57c1e9b","49b2c746","66d1ab72","34d27803","843896be","aa4c402d","eed91da5","434bdf9d","0770580d","c8e86f14","c4484574","e3081fd3","43deff29","deb35ee7","00a2ff18","fdb68dc4","550a0c9d","31cd85d7","31431c49","3daff112","fa0b5d10","9c5f4539","95281228","131732a0","6708838f","5eac6a29","f09ce6b3","78336fc0","57fbcb1b","1e197456","db749615","4abcb403","f048719a","63b2e02b","0082fa4c","8f99236e","7d5c53c4","68b5a797","f7b52501","3ddfc71c","d54a6b5f","a2bd7f1e","f0e31f32","d0c510c5","71c7270b","ae7d3780","db63c882","d1a5cd90","a974eb0c","1a7a23d4","fc627b17","cad3eff0","12ff8c25","c8694f3a","6d2555aa","533c7408","8ea170d2","109531f4","e8c7dd5b","108549ba","c9494ee8","bc1509f5","10968d37","dfa88b94","21b61a85","284bf0b0","23437955","a8e79394","6e59ba12","5ab25363","10ab07eb","91f40022","ca6c2e4c","e151c916","c0af45f4","50a463eb","4f2ed774","a2bccc4b","b1949215","e35772c9","25809d7e","89207b78","e6872b30","4150776b","e66bce0b","c6cd3574","f5086cb9","6cb514ea","9b528165","5646568c","a72739bc","cdfac03d","1b6eea7f","9d35efa9","89c7446c","e16080de","074db05e"],"recorded":[],"recordedLocks":[],"scorecard":[],"safelocksOwn":[],"safelocksCracked":[],"safelocksWishlist":[]};
 
@@ -53,26 +53,6 @@ export const beltColors: Record<Belt, string> = {
   Black: "#080a0f",
   Unranked: "#566171",
 };
-
-export const profileBeltCounts: Record<Belt, number> = {
-  White: 3,
-  Yellow: 5,
-  Orange: 8,
-  Green: 16,
-  Blue: 35,
-  Purple: 24,
-  Brown: 14,
-  Red: 12,
-  Black: 29,
-  Unranked: 1,
-};
-
-export const statusBenchmarks = [
-  { label: "Owned", user: 78, average: 14, topTen: 250 },
-  { label: "Picked", user: 11, average: 11, topTen: 280 },
-  { label: "Recorded", user: 0, average: 11, topTen: 260 },
-  { label: "Wishlist", user: 69, average: 8, topTen: 100 },
-];
 
 export const progression = [
   { belt: "Yellow" as Belt, date: "2024-09-02" },
@@ -4017,42 +3997,4 @@ export const locks: LockRecord[] = lockCatalog.map((lock) => ({
   picked: pickedLockIds.has(lock.id),
 }));
 
-export const ownedLocks = locks.filter((lock) => lock.status === "Owned");
-export const wishlistLocks = locks.filter((lock) => lock.status === "Wishlist");
-
-export const beltCounts = Object.fromEntries(
-  beltOrder.map((belt) => [belt, ownedLocks.filter((lock) => lock.belt === belt).length]),
-) as Record<Belt, number>;
-
-export const mechanismCounts = Object.entries(
-  ownedLocks.reduce<Record<string, number>>((counts, lock) => {
-    lock.mechanisms.forEach((mechanism) => {
-      counts[mechanism] = (counts[mechanism] ?? 0) + 1;
-    });
-    return counts;
-  }, {}),
-)
-  .map(([label, value]) => ({ label, value }))
-  .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
-
-const brandFamilies = [
-  "ASSA",
-  "ABUS",
-  "Master Lock",
-  "Ruko",
-  "Mul-T-Lock",
-  "Schlage",
-  "GOAL",
-  "Burg Wächter",
-  "Yale",
-  "Lockwood",
-  "Chubb",
-  "FAB",
-];
-
-export const brandCounts = brandFamilies
-  .map((label) => ({
-    label,
-    value: ownedLocks.filter((lock) => lock.name.includes(label)).length,
-  }))
-  .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+// Keep the generated snapshot lean; active-profile analytics are derived in page.tsx.

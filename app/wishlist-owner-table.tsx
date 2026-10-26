@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { beltColors, type LockRecord } from "./data";
 import { useCommunityInsights } from "./community-insights";
-import { wishlistOwnersWorkbook } from "./wishlist-owner-export";
 import {
   ActivityStatus,
   DataTimestamp,
@@ -45,6 +44,7 @@ export default function WishlistOwnerTable({
   const [directory, setDirectory] = useState<TopOwnerDirectory | null>(null);
   const [directoryError, setDirectoryError] = useState("");
   const [exportError, setExportError] = useState("");
+  const [exporting, setExporting] = useState(false);
   const [loaded, setLoaded] = useState<WishlistProfile[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -218,10 +218,12 @@ export default function WishlistOwnerTable({
     forceRefresh.current = force;
     setRefresh((n) => n + 1);
   };
-  const exportSpreadsheet = () => {
-    if (loading || !directory) return;
+  const exportSpreadsheet = async () => {
+    if (loading || !directory || exporting) return;
+    setExporting(true);
     setExportError("");
     try {
+      const { wishlistOwnersWorkbook } = await import("./wishlist-owner-export");
       const bytes = wishlistOwnersWorkbook(activeProfile, owners, {
         totalProfiles: members.length,
         failedNames: failed.map((p) => p.name),
@@ -247,6 +249,8 @@ export default function WishlistOwnerTable({
           ? reason.message
           : "The Excel export could not be created. Please try again.",
       );
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -343,11 +347,11 @@ export default function WishlistOwnerTable({
           <button
             className="secondary-button wishlist-export"
             onClick={exportSpreadsheet}
-            disabled={loading || !rows.length || !directory}
+            disabled={loading || !rows.length || !directory || exporting}
             title="Download a formatted Excel tracker with Wishlist and Owner matches sheets, including every wishlist lock"
           >
             <OwnerActionIcon kind="export" />
-            Export Excel
+            {exporting ? "Preparing Excel…" : "Export Excel"}
           </button>
         </div>
         {exportError && (
