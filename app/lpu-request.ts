@@ -69,14 +69,18 @@ export async function fetchLpuUser(
   signal?: AbortSignal,
   background = false,
 ): Promise<Response> {
+  const githubPages =
+    typeof window !== "undefined" && window.location?.hostname.endsWith("github.io");
   const proxied =
     typeof window !== "undefined" &&
     window.location &&
     !window.location.hostname.endsWith("github.io");
-  const requestUrl = proxied
-    ? `/api/lpu-user?userId=${encodeURIComponent(id)}`
-    : `https://api.lpubelts.com/api/v1/users/${encodeURIComponent(id)}`;
-  const attempts = proxied ? 1 : 2; // The same-origin server already retries upstream failures.
+  const requestUrl = githubPages
+    ? `https://todd-lpu-profile-relay.nicelife70117.chatgpt.site/api/lpu-user?userId=${encodeURIComponent(id)}`
+    : proxied
+      ? `/api/lpu-user?userId=${encodeURIComponent(id)}`
+      : `https://api.lpubelts.com/api/v1/users/${encodeURIComponent(id)}`;
+  const attempts = proxied || githubPages ? 1 : 2; // Both relays already retry upstream failures.
   for (let attempt = 0; attempt < attempts; attempt++) {
     signal?.throwIfAborted();
     checkLpuBudget(background);

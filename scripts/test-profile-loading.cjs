@@ -109,6 +109,26 @@ const url = `https://test.chatgpt.site/api/lpu-profile?url=${encodeURIComponent(
     [`/api/lpu-user?userId=${id}`],
     "Hosted browser requests stay on the same origin",
   );
+  const githubCalls = [];
+  const github = environment(
+    async (url) => {
+      githubCalls.push(url);
+      return Response.json({ data: {} });
+    },
+    {
+      location: { hostname: "gnarly-todd.github.io" },
+      localStorage: {
+        getItem: (key) => storage.get(key) ?? null,
+        setItem: (key, value) => storage.set(key, value),
+      },
+    },
+  );
+  await github("app/lpu-request.ts").fetchLpuUser(id);
+  assert.deepEqual(
+    githubCalls,
+    [`https://todd-lpu-profile-relay.nicelife70117.chatgpt.site/api/lpu-user?userId=${id}`],
+    "GitHub Pages uses the controlled public-profile relay",
+  );
   const limited = environment(
     async () => new Response("", { status: 429, headers: { "Retry-After": "60" } }),
   );

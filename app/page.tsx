@@ -281,7 +281,7 @@ async function fetchLpuProfileFromGithubPages(profileUrl: string): Promise<Loade
 
   const response = await fetchLpuUser(profileId).catch((error) => {
     if (error instanceof LpuRateLimitError) throw error;
-    throw new Error("LPU could not be reached from GitHub Pages. LPU’s API must allow this site’s browser origin. Your saved profile has been kept.");
+    throw new Error("The profile refresh service could not be reached. Your saved profile has been kept. Please try again shortly.");
   });
 
   if (response?.status === 404)
@@ -321,7 +321,7 @@ async function fetchLpuProfileFromGithubPages(profileUrl: string): Promise<Loade
     id: profileId,
     name: profile.data.displayName?.trim() || fallbackName || "LPU profile",
     url: `https://lpubelts.com/#/profile/${profileId}`,
-    refreshedAt: formatNewYorkSnapshot(),
+    refreshedAt: formatNewYorkSnapshot(new Date(Number(response.headers.get("X-LPU-Fetched-At")) || Date.now())),
     collections: profileCollections(collections),
     locks: selected.map((entry) => ({
       id: entry.id,

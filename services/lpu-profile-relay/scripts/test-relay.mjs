@@ -1,0 +1,35 @@
+import assert from 'node:assert/strict';
+import {createRelay} from '../worker/index.js';
+const id='valid-public-profile-id-000';
+const request=(user=id,options={})=>new Request('https://relay.example/api/lpu-user?userId='+encodeURIComponent(user),{headers:{Origin:'https://gnarly-todd.github.io','cf-connecting-ip':'qa-client',...(options.headers||{})},...(options.method?{method:options.method}:{})});
+const payload=(user)=>({data:{userId:user,displayName:'Example user',email:'never-forward@example.com',collections:{own:['lock-a'],wishlist:['lock-b'],picked:['lock-a'],privateArray:['do-not-forward']}}});
+let calls=0,time=Date.now();
+const relay=createRelay({now:()=>time,sleep:async()=>{},fetchUpstream:async url=>{calls++;assert(url.startsWith('https://api.lpubelts.com/api/v1/users/'));return Response.json(payload(url.split('/').at(-1)));}});
+assert.equal((await relay.fetch(request('invalid'))).status,400);
+assert.equal((await relay.fetch(request(id,{headers:{Origin:'https://untrusted.example'}}))).status,403);
+assert.equal((await relay.fetch(request(id,{method:'POST'}))).status,405);
+assert.equal(calls,0);
+const preflight=await relay.fetch(request(id,{method:'OPTIONS'}));assert.equal(preflight.status,204);assert.equal(preflight.headers.get('access-control-allow-origin'),'https://gnarly-todd.github.io');
+const results=await Promise.all([relay.fetch(request()),relay.fetch(request()),relay.fetch(request())]);
+assert.equal(calls,1);
+const first=results[0];assert.equal(first.status,200);assert.equal(first.headers.get('access-control-allow-origin'),'https://gnarly-todd.github.io');assert(first.headers.get('access-control-expose-headers').includes('Retry-After'));
+const body=await first.json();assert(!body.data.email);assert(!body.data.collections.privateArray);assert.deepEqual(body.data.collections.picked,['lock-a']);
+const fetchedAt=first.headers.get('x-lpu-fetched-at');assert(fetchedAt);
+assert.equal((await relay.fetch(request())).headers.get('x-lpu-fetched-at'),fetchedAt);assert.equal(calls,1);
+time+=31000;assert.equal((await relay.fetch(request())).status,200);assert.equal(calls,2);
+let limitedCalls=0,clock=Date.now();
+const limited=createRelay({now:()=>clock,sleep:async()=>{},fetchUpstream:async url=>{limitedCalls++;return limitedCalls===1?new Response('',{status:429,headers:{'Retry-After':'60'}}):Response.json(payload(url.split('/').at(-1)));}});
+const pause=await limited.fetch(request());assert.equal(pause.status,429);assert.equal(pause.headers.get('retry-after'),'60');assert((await pause.json()).retryAt>clock);
+assert.equal((await limited.fetch(request('another-public-profile-id-001'))).status,429);assert.equal(limitedCalls,1);
+clock+=61000;assert.equal((await limited.fetch(request())).status,200);assert.equal(limitedCalls,2);
+let budgetCalls=0;
+const budget=createRelay({sleep:async()=>{},fetchUpstream:async url=>{budgetCalls++;return Response.json(payload(url.split('/').at(-1)));}});
+for(let n=0;n<60;n++)assert.equal((await budget.fetch(request('budget-public-profile-'+String(n).padStart(4,'0')))).status,200);
+assert.equal((await budget.fetch(request('budget-public-profile-0060'))).status,429);assert.equal(budgetCalls,60);
+const invalid=createRelay({fetchUpstream:async()=>Response.json({data:{userId:id,collections:{own:[],wishlist:[]}}})});assert.equal((await invalid.fetch(request())).status,502);
+let failures=0;
+const failed=createRelay({sleep:async()=>{},fetchUpstream:async()=>{failures++;throw new TypeError('Network failed');}});assert.equal((await failed.fetch(request())).status,502);assert.equal(failures,2);
+console.log('PASS: fixed upstream, ID/origin/method validation, CORS/preflight, request coalescing, 30-second cache, preserved fetch timestamp, public-field filtering, per-client budget, upstream cooldown and bounded retries.');
+if(process.argv.includes('--live')){
+ const live=createRelay();const res=await live.fetch(request('84dULJFIN4bHIC1LxCiuvBCSqT43'));assert.equal(res.status,200);const data=(await res.json()).data;console.log(JSON.stringify({status:res.status,owned:data.collections.own.length,wishlist:data.collections.wishlist.length,picked:data.collections.picked.length,cors:res.headers.get('access-control-allow-origin')}));
+}

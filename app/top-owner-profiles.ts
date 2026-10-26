@@ -187,7 +187,11 @@ export async function fetchOwnerSnapshot(id: string, signal?: AbortSignal): Prom
   // or try another source after an access restriction.
   const response = await fetchLpuUser(id, signal, true);
   if (!response.ok) throw new Error(`LPU profile could not be loaded (${response.status}).`);
-  return parseOwnerSnapshot(await response.json(), id);
+  return parseOwnerSnapshot(
+    await response.json(),
+    id,
+    Number(response.headers.get("X-LPU-Fetched-At")) || Date.now(),
+  );
 }
 
 export async function loadOwnerSnapshots(
