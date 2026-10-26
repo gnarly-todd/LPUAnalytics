@@ -1,5 +1,5 @@
 export type DirectoryProfile = { id: string; displayName: string };
-export const PROFILE_DIRECTORY_URL = "https://explore.lpubelts.com/data/leaderboardData.json";
+export const PROFILE_DIRECTORY_URL = "https://assets.lpubelts.com/data/leaderboardData.json";
 
 export function parseProfileDirectory(value: unknown): DirectoryProfile[] {
   if (!value || typeof value !== "object" || !Array.isArray((value as { data?: unknown }).data))

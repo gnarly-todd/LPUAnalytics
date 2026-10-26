@@ -42,7 +42,7 @@ function environment(hooks) {
     downloads: [],
   };
   env.fetch = async (url, options) => {
-    if (!url.includes("/services/api/")) {
+    if (!url.includes("/api/v1/")) {
       env.directoryCalls++;
       return Response.json({
         data: [...profiles, reserveProfile].map((p) => ({

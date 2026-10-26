@@ -57,7 +57,7 @@ import {
 const HOSTED_SITE_ORIGIN = "https://todd-lock-analytics.nicelife70117.chatgpt.site";
 const SOURCE_URL = "https://lpubelts.com/#/profile/84dULJFIN4bHIC1LxCiuvBCSqT43?name=todd";
 const LPU_DATA_URL =
-  "https://raw.githubusercontent.com/Lockpickers-United/lpu-belt-explorer/main/src/data/data.json";
+  "https://raw.githubusercontent.com/Lockpickers-United/lpu-belt-explorer/main/apps/web/src/data/data.json";
 const LPU_STATS_URL = "https://lpubelts.com/#/stats";
 const DEFAULT_PROFILE_ID = "84dULJFIN4bHIC1LxCiuvBCSqT43";
 const SAVED_PROFILES_KEY = "todd-lock-analytics-profiles-v1";
@@ -279,7 +279,10 @@ async function fetchLpuProfileFromGithubPages(profileUrl: string): Promise<Loade
   if (!match) throw new Error("Enter a complete public LPU profile link.");
   const profileId = match[1];
 
-  const response = await fetchLpuUser(profileId);
+  const response = await fetchLpuUser(profileId).catch((error) => {
+    if (error instanceof LpuRateLimitError) throw error;
+    throw new Error("LPU could not be reached from GitHub Pages. LPU’s API must allow this site’s browser origin. Your saved profile has been kept.");
+  });
 
   if (response?.status === 404)
     throw new Error("That LPU profile does not exist or is not public.");

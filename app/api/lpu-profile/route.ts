@@ -4,7 +4,7 @@ import { profileCollections } from "../../insights-model";
 
 const GITHUB_PAGES_ORIGIN = "https://gnarly-todd.github.io";
 const LPU_DATA =
-  "https://raw.githubusercontent.com/Lockpickers-United/lpu-belt-explorer/main/src/data/data.json";
+  "https://raw.githubusercontent.com/Lockpickers-United/lpu-belt-explorer/main/apps/web/src/data/data.json";
 const PROFILE_ID_PATTERN = /^[A-Za-z0-9_-]{20,128}$/;
 const CALLBACK_PATTERN = /^__lpuProfile_[A-Za-z0-9_]{1,96}$/;
 const BELTS = new Set<Belt>([

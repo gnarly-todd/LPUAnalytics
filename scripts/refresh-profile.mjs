@@ -1,9 +1,9 @@
 import { readFile, writeFile } from "node:fs/promises";
 
 const PROFILE_ID = "84dULJFIN4bHIC1LxCiuvBCSqT43";
-const LPU_USER_API = "https://explore.lpubelts.com/services/api/v1/users";
+const LPU_USER_API = "https://api.lpubelts.com/api/v1/users";
 const LPU_DATA =
-  "https://raw.githubusercontent.com/Lockpickers-United/lpu-belt-explorer/main/src/data/data.json";
+  "https://raw.githubusercontent.com/Lockpickers-United/lpu-belt-explorer/main/apps/web/src/data/data.json";
 const DATA_FILE = new URL("../app/data.ts", import.meta.url);
 
 async function getText(url) {

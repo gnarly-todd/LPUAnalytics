@@ -13,21 +13,33 @@ function readBudget(): Budget {
       const stored = JSON.parse(window.localStorage.getItem(STATE_KEY) || "null");
       if (stored && Array.isArray(stored.attempts)) memory = stored;
     }
-  } catch { /* In-memory protection still works when storage is unavailable. */ }
-  memory.attempts = memory.attempts.filter((time) => Number.isFinite(time) && time > Date.now() - WINDOW_MS);
+  } catch {
+    /* In-memory protection still works when storage is unavailable. */
+  }
+  memory.attempts = memory.attempts.filter(
+    (time) => Number.isFinite(time) && time > Date.now() - WINDOW_MS,
+  );
   return memory;
 }
 
 function saveBudget(budget: Budget) {
   memory = budget;
   try {
-    if (typeof window !== "undefined") window.localStorage.setItem(STATE_KEY, JSON.stringify(budget));
-  } catch { /* Storage errors must not fail a successful profile request. */ }
+    if (typeof window !== "undefined")
+      window.localStorage.setItem(STATE_KEY, JSON.stringify(budget));
+  } catch {
+    /* Storage errors must not fail a successful profile request. */
+  }
 }
 
 export class LpuRateLimitError extends Error {
-  constructor(public retryAt: number, public backgroundOnly = false) {
-    super(`${backgroundOnly ? "Background owner checks are paused to keep profile loading available." : "LPU has temporarily limited profile requests."} Requests can resume after ${new Date(retryAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}. Saved data remains available.`);
+  constructor(
+    public retryAt: number,
+    public backgroundOnly = false,
+  ) {
+    super(
+      `${backgroundOnly ? "Background owner checks are paused to keep profile loading available." : "LPU has temporarily limited profile requests."} Requests can resume after ${new Date(retryAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}. Saved data remains available.`,
+    );
     this.name = "LpuRateLimitError";
   }
 }
@@ -52,8 +64,20 @@ export function checkLpuBudget(background = false) {
     throw new LpuRateLimitError(budget.attempts[0] + WINDOW_MS + 1000, true);
 }
 
-export async function fetchLpuUser(id: string, signal?: AbortSignal, background = false): Promise<Response> {
-  for (let attempt = 0; attempt < 2; attempt++) {
+export async function fetchLpuUser(
+  id: string,
+  signal?: AbortSignal,
+  background = false,
+): Promise<Response> {
+  const proxied =
+    typeof window !== "undefined" &&
+    window.location &&
+    !window.location.hostname.endsWith("github.io");
+  const requestUrl = proxied
+    ? `/api/lpu-user?userId=${encodeURIComponent(id)}`
+    : `https://api.lpubelts.com/api/v1/users/${encodeURIComponent(id)}`;
+  const attempts = proxied ? 1 : 2; // The same-origin server already retries upstream failures.
+  for (let attempt = 0; attempt < attempts; attempt++) {
     signal?.throwIfAborted();
     checkLpuBudget(background);
     const budget = readBudget();
@@ -61,13 +85,19 @@ export async function fetchLpuUser(id: string, signal?: AbortSignal, background 
     saveBudget(budget);
     let response: Response;
     try {
-      response = await fetch(`https://explore.lpubelts.com/services/api/v1/users/${encodeURIComponent(id)}`, {
+      response = await fetch(requestUrl, {
         headers: { Accept: "application/json" },
         cache: "no-store",
-        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000),
+        signal: signal
+          ? AbortSignal.any([signal, AbortSignal.timeout(20_000)])
+          : AbortSignal.timeout(20_000),
       });
     } catch (error) {
-      if (signal?.aborted || attempt === 1) throw error;
+      if (signal?.aborted) throw error;
+      if (attempt === attempts - 1)
+        throw new Error(
+          "LPU’s profile service could not be reached. Your saved data has been kept. Please try again shortly.",
+        );
       await new Promise((resolve) => setTimeout(resolve, 1000));
       continue;
     }
@@ -76,7 +106,8 @@ export async function fetchLpuUser(id: string, signal?: AbortSignal, background 
       recordLpuCooldown(retryAt);
       throw new LpuRateLimitError(retryAt);
     }
-    if (response.ok || ![500, 502, 503, 504].includes(response.status) || attempt === 1) return response;
+    if (response.ok || ![500, 502, 503, 504].includes(response.status) || attempt === attempts - 1)
+      return response;
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
   throw new Error("LPU profile could not be loaded.");
@@ -88,20 +119,29 @@ export function readProfileCache<T extends { id: string; locks: unknown[] }>(id:
     try {
       const value = JSON.parse(window[storageName].getItem(`lpu-profile-${id}`) || "null");
       if (value?.id === id && Array.isArray(value.locks)) return value as T;
-    } catch { /* Try the other cache. */ }
+    } catch {
+      /* Try the other cache. */
+    }
   }
   return null;
 }
 
 export function writeProfileCache(profile: { id: string; locks: unknown[] }) {
   for (const storageName of ["localStorage", "sessionStorage"] as const) {
-    try { window[storageName].setItem(`lpu-profile-${profile.id}`, JSON.stringify(profile)); }
-    catch { /* A full or disabled cache must not break add/edit/refresh. */ }
+    try {
+      window[storageName].setItem(`lpu-profile-${profile.id}`, JSON.stringify(profile));
+    } catch {
+      /* A full or disabled cache must not break add/edit/refresh. */
+    }
   }
 }
 
 export function removeProfileCache(id: string) {
   for (const storageName of ["localStorage", "sessionStorage"] as const) {
-    try { window[storageName].removeItem(`lpu-profile-${id}`); } catch { /* Optional cache. */ }
+    try {
+      window[storageName].removeItem(`lpu-profile-${id}`);
+    } catch {
+      /* Optional cache. */
+    }
   }
 }

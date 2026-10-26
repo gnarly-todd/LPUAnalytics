@@ -1,14 +1,14 @@
 export const INSIGHT_SOURCES = {
-  stats: "https://explore.lpubelts.com/data/collectionStatsCurrent.json",
+  stats: "https://assets.lpubelts.com/data/collectionStatsCurrent.json",
   catalog:
-    "https://raw.githubusercontent.com/Lockpickers-United/lpu-belt-explorer/main/src/data/data.json",
+    "https://raw.githubusercontent.com/Lockpickers-United/lpu-belt-explorer/main/apps/web/src/data/data.json",
   votes:
-    "https://raw.githubusercontent.com/Lockpickers-United/lpu-belt-explorer/main/src/data/classification-votes-historical.json",
-  picks: "https://explore.lpubelts.com/data/pickStats.json",
-  discord: "https://explore.lpubelts.com/data/discordBeltCounts.json",
-  reddit: "https://explore.lpubelts.com/data/redditBeltCounts.json",
+    "https://raw.githubusercontent.com/Lockpickers-United/lpu-belt-explorer/main/apps/web/src/data/classification-votes-historical.json",
+  picks: "https://assets.lpubelts.com/data/pickStats.json",
+  discord: "https://assets.lpubelts.com/data/discordBeltCounts.json",
+  reddit: "https://assets.lpubelts.com/data/redditBeltCounts.json",
   safes:
-    "https://raw.githubusercontent.com/Lockpickers-United/lpu-belt-explorer/main/src/data/safelocks.json",
+    "https://raw.githubusercontent.com/Lockpickers-United/lpu-belt-explorer/main/apps/web/src/data/safelocks.json",
 };
 const belts = ["White", "Yellow", "Orange", "Green", "Blue", "Purple", "Brown", "Red", "Black"];
 const count = (value) =>
