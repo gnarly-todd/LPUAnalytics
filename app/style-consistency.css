@@ -194,7 +194,11 @@
 }
 .site-shell .filter-bar label:not(.search-field) {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: stretch;
+  justify-items: stretch;
   align-content: end;
+  min-width: 0;
   gap: 8px;
   padding: 0;
   border: 0;
@@ -441,9 +445,32 @@
     gap: 14px;
   }
   .site-shell .filter-bar {
-    grid-template-columns: minmax(0, 1fr);
-    padding: 16px;
-    gap: 14px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 14px;
+    gap: 12px;
+  }
+  .site-shell .filter-bar label:nth-child(2),
+  .site-shell .filter-bar label:last-child {
+    grid-column: 1 / -1;
+  }
+  .site-shell .filter-bar label:not(.search-field) {
+    gap: 6px;
+    text-align: left;
+  }
+  .site-shell .filter-bar select {
+    width: 100%;
+    max-width: 100%;
+    min-height: 46px;
+  }
+  .site-shell .filter-bar .search-field {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0 8px;
+    padding: 0 12px 8px;
+  }
+  .site-shell .filter-bar .search-field > span {
+    grid-column: 1 / -1;
+    justify-self: end;
+    line-height: 1.4;
   }
   .site-shell .comparison-page {
     width: calc(100% - 26px);
