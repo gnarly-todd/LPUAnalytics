@@ -1,0 +1,109 @@
+.learning-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.learning-card {
+  padding: 20px;
+  border: 1px solid var(--border, #303744);
+  border-radius: 16px;
+  min-width: 0;
+  background: rgba(128, 144, 176, 0.04);
+}
+.learning-card h4 {
+  margin: 8px 0;
+  font-size: 18px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.learning-card a {
+  color: inherit;
+  text-decoration-color: #55d4db;
+  text-underline-offset: 4px;
+}
+.learning-card p,
+.catalog-details p {
+  color: var(--muted);
+  line-height: 1.65;
+  font-size: 13px;
+}
+.learning-card > strong {
+  display: block;
+  font-size: 13px;
+  margin: 14px 0 8px;
+}
+.learning-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+.learning-tags span {
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 5px 9px;
+  border-radius: 9px;
+  background: rgba(79, 197, 207, 0.09);
+  border: 1px solid rgba(79, 197, 207, 0.2);
+  overflow-wrap: anywhere;
+}
+.catalog-details {
+  margin: 14px 0;
+  font-size: 13px;
+  min-width: 0;
+}
+.catalog-details summary {
+  cursor: pointer;
+  color: var(--muted);
+  padding: 8px 0;
+  min-height: 32px;
+}
+.catalog-details[open] summary {
+  color: inherit;
+}
+.catalog-flags {
+  border-left: 3px solid #e7b761;
+  padding-left: 10px;
+}
+.learning-planner > p {
+  line-height: 1.7;
+  color: var(--muted);
+}
+@media (max-width: 640px) {
+  .learning-grid {
+    grid-template-columns: 1fr;
+  }
+  .learning-card {
+    padding: 16px;
+  }
+  .learning-planner .panel-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .learning-planner select {
+    width: 100%;
+    max-width: 100%;
+  }
+  .learning-planner .insight-controls label {
+    width: 100%;
+  }
+}
+
+.insight-jumps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 24px;
+}
+.insight-jumps button {
+  font-size: 13px;
+  min-height: 44px;
+}
+.expanded-insights h3 {
+  scroll-margin-top: 100px;
+}
+.expanded-insights h3:focus {
+  outline: 2px solid #55d4db;
+  outline-offset: 5px;
+}

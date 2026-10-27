@@ -2,6 +2,7 @@
 
 import WishlistOwnerTable from "./wishlist-owner-table";
 import ProfileNameInput from "./profile-name-input";
+import { CatalogDetails } from "./learning-planner";
 import { profileStorage } from "./profile-storage";
 import {
   HomeSummary,
@@ -1444,6 +1445,10 @@ export default function Home() {
 function HomeContent() {
   const { screen, navigate } = useScreenNavigation();
   const { data: communityData } = useCommunityInsights();
+  const catalogById = useMemo(
+    () => new Map(communityData.catalog.map((entry) => [entry.id, entry])),
+    [communityData],
+  );
   const lpuCatalog = {
     all: communityData.catalog.length,
     ranked: communityData.catalog.filter((entry) => entry.belt !== "Unranked").length,
@@ -1477,6 +1482,7 @@ function HomeContent() {
   const [belt, setBelt] = useState<"All" | Belt>("All");
   const [mechanism, setMechanism] = useState("All");
   const [sort, setSort] = useState("belt-desc");
+  const [pickedFilter, setPickedFilter] = useState("All");
   const [visible, setVisible] = useState(24);
   const [surprise, setSurprise] = useState<LockRecord | null>(null);
   const [challengeRequest, setChallengeRequest] = useState(0);
@@ -1705,7 +1711,7 @@ function HomeContent() {
     const filtered = locks.filter((lock) => {
       const matchesQuery =
         !normalized ||
-        `${lock.name} ${lock.version ?? ""} ${lock.mechanisms.join(" ")}`
+        `${lock.name} ${lock.version ?? ""} ${lock.mechanisms.join(" ")} ${(catalogById.get(lock.id)?.features ?? []).join(" ")}`
           .toLowerCase()
           .includes(normalized);
       const matchesBelt = belt === "All" || lock.belt === belt;
@@ -1715,7 +1721,10 @@ function HomeContent() {
           ? lock.mechanisms.length > 1
           : lock.mechanisms.includes(mechanism));
       const matchesStatus = status === "All" || lock.status === status;
-      return matchesQuery && matchesBelt && matchesMechanism && matchesStatus;
+      const matchesPicked =
+        pickedFilter === "All" ||
+        (lock.status === "Owned" && (pickedFilter === "Picked" ? lock.picked : !lock.picked));
+      return matchesQuery && matchesBelt && matchesMechanism && matchesStatus && matchesPicked;
     });
     return [...filtered].sort((a, b) => {
       if (sort === "belt-desc") {
@@ -1735,17 +1744,19 @@ function HomeContent() {
       if (sort === "name-desc") return b.name.localeCompare(a.name);
       return a.name.localeCompare(b.name);
     });
-  }, [locks, query, status, belt, mechanism, sort]);
+  }, [locks, query, status, belt, mechanism, sort, pickedFilter, catalogById]);
 
   const jumpToExplorer = () => navigate("explorer");
   const selectBelt = (selected: Belt) => {
     setStatus("Owned");
+    setPickedFilter("All");
     setBelt(selected);
     setVisible(24);
     requestAnimationFrame(jumpToExplorer);
   };
   const selectMechanism = (selected: string) => {
     setStatus("Owned");
+    setPickedFilter("All");
     setMechanism(selected);
     setVisible(24);
     requestAnimationFrame(jumpToExplorer);
@@ -2667,6 +2678,7 @@ function HomeContent() {
                       aria-pressed={status === value}
                       onClick={() => {
                         setStatus(value);
+                        setPickedFilter("All");
                         setVisible(24);
                       }}
                     >
@@ -2713,9 +2725,23 @@ function HomeContent() {
                         setQuery(event.target.value);
                         setVisible(24);
                       }}
-                      placeholder="Search model, version, or mechanism…"
+                      placeholder="Search model, mechanism, or feature…"
                     />
                     <span>{filteredLocks.length} results</span>
+                  </label>
+                  <label>
+                    <span>Picking status</span>
+                    <select
+                      value={pickedFilter}
+                      onChange={(event) => {
+                        setPickedFilter(event.target.value);
+                        setVisible(24);
+                      }}
+                    >
+                      <option value="All">All statuses</option>
+                      <option value="Picked">Picked owned locks</option>
+                      <option value="Unpicked">Unpicked owned locks</option>
+                    </select>
                   </label>
                   <label>
                     <span>Belt</span>
@@ -2777,7 +2803,7 @@ function HomeContent() {
                     {filteredLocks.slice(0, visible).map((lock, index) => (
                       <article
                         className="lock-card"
-                        key={`${lock.name}-${lock.version}-${index}`}
+                        key={lock.id}
                         style={{ "--belt": beltColors[lock.belt] } as React.CSSProperties}
                       >
                         <span
@@ -2824,6 +2850,7 @@ function HomeContent() {
                             LPU Belts <Icon name="external" size={12} />
                           </a>
                         </div>
+                        <CatalogDetails entry={catalogById.get(lock.id)} />
                         <div className="lock-card-footer">
                           <span>Belt rank</span>
                           <BeltPill belt={lock.belt} label={lock.beltLevel} compact />
@@ -2839,6 +2866,7 @@ function HomeContent() {
                           onClick={() => {
                             setQuery("");
                             setStatus("Owned");
+                            setPickedFilter("All");
                             setBelt("All");
                             setMechanism("All");
                           }}

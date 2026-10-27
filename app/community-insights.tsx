@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import snapshot from "./community-insights-data.json";
+import { LearningPlanner } from "./learning-planner";
 import { CollectionBenchmarkCards } from "./collection-mobile";
 import { fetchInsightSources } from "./insight-sources.mjs";
 import {
@@ -285,11 +286,37 @@ export function ExpandedInsights({
         </p>
       )}
 
+      <nav className="insight-jumps" aria-label="Jump to an insight section">
+        {[
+          ["learning-planner-title", "Wishlist planner"],
+          ["catalog-coverage", "Catalog coverage"],
+          ["practice-ideas", "Practice ideas"],
+          ["ranking-opinions", "Ranking opinions"],
+          ["catalog-updates", "Catalog updates"],
+          ["published-lists", "Other collections"],
+        ].map(([id, label]) => (
+          <button
+            className="secondary-button"
+            key={id}
+            onClick={() => {
+              const target = document.getElementById(id);
+              target?.scrollIntoView({ behavior: "smooth", block: "start" });
+              target?.focus({ preventScroll: true });
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+      <LearningPlanner profile={profile} data={data} />
+
       <article className="panel insight-panel">
         <div className="panel-title">
           <div>
             <p className="eyebrow">Coverage</p>
-            <h3>Your share of the LPU catalog</h3>
+            <h3 id="catalog-coverage" tabIndex={-1}>
+              Your share of the LPU catalog
+            </h3>
           </div>
           <span className="panel-badge">
             {rankedOwned}/{rankedCatalog.length} ranked entries ·{" "}
@@ -360,7 +387,9 @@ export function ExpandedInsights({
         <div className="panel-title">
           <div>
             <p className="eyebrow">Practice plan</p>
-            <h3>What to pick next</h3>
+            <h3 id="practice-ideas" tabIndex={-1}>
+              What to pick next
+            </h3>
           </div>
           <span className="panel-badge">Ranked, owned, unpicked</span>
         </div>
@@ -398,7 +427,9 @@ export function ExpandedInsights({
         <div className="panel-title">
           <div>
             <p className="eyebrow">Community opinions</p>
-            <h3>How ranking votes compare</h3>
+            <h3 id="ranking-opinions" tabIndex={-1}>
+              How ranking votes compare
+            </h3>
           </div>
           <span className="panel-badge">
             {data.voteCount.toLocaleString("en-US")} valid historical votes
@@ -508,7 +539,9 @@ export function ExpandedInsights({
         <div className="panel-title">
           <div>
             <p className="eyebrow">Catalog activity</p>
-            <h3>Recent additions and updates</h3>
+            <h3 id="catalog-updates" tabIndex={-1}>
+              Recent additions and updates
+            </h3>
           </div>
         </div>
         <div className="insight-controls">
@@ -594,7 +627,9 @@ export function ExpandedInsights({
         <div className="panel-title">
           <div>
             <p className="eyebrow">Additional collections</p>
-            <h3>Recorded locks, scorecard, and safe locks</h3>
+            <h3 id="published-lists" tabIndex={-1}>
+              Recorded locks, scorecard, and safe locks
+            </h3>
           </div>
         </div>
         <div className="insight-extra-counts">

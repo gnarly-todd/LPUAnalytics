@@ -63,6 +63,14 @@ export function normalizeInsightSources(raw, now = new Date().toISOString()) {
       rankDate: text(entry.currentBeltDate),
       documentedPicks: count(raw.picks.byLock?.[entry.id]),
       popularity: count(entry.popularityIndex),
+      scorecardCount:
+        typeof entry.scorecardCount === "number" ? count(entry.scorecardCount) : undefined,
+      features: strings(entry.features).filter(
+        (value) => !/^(Flickr Update|Latest Changelog|Under Review ⚑|Picking Risk)$/i.test(value),
+      ),
+      flags: strings(entry.features).filter((value) =>
+        /^(Under Review ⚑|Picking Risk)$/i.test(value),
+      ),
     }))
     .filter((entry) => entry.id && entry.name);
   if (catalog.length !== raw.catalog.length)

@@ -57,6 +57,9 @@ export type CatalogInsight = {
   rankDate?: string;
   documentedPicks: number;
   popularity: number;
+  features?: string[];
+  flags?: string[];
+  scorecardCount?: number;
 };
 export type CohortStat = { users: number; average: number; maximum: number };
 export type InsightsData = {
@@ -253,7 +256,14 @@ export function validInsightsData(value: unknown): value is InsightsData {
         entry.makes.every((name) => typeof name === "string") &&
         Array.isArray(entry.mechanisms) &&
         entry.mechanisms.every((name) => typeof name === "string") &&
-        Number.isFinite(entry.documentedPicks),
+        Number.isFinite(entry.documentedPicks) &&
+        [entry.features, entry.flags].every(
+          (list) =>
+            list === undefined ||
+            (Array.isArray(list) && list.every((tag) => typeof tag === "string")),
+        ) &&
+        (entry.scorecardCount === undefined ||
+          (Number.isFinite(entry.scorecardCount) && entry.scorecardCount >= 0)),
     ) &&
     !!data.cohorts?.all?.own &&
     !!data.cohorts?.all?.picked &&
@@ -285,4 +295,37 @@ export function validInsightsData(value: unknown): value is InsightsData {
       (url) => typeof url === "string" && url.startsWith("https://"),
     )
   );
+}
+
+// Novelty compares the wishlist with Owned, never the selected screen or another profile.
+export function learningWishlist(profile: InsightProfile, data: InsightsData) {
+  const catalog = new Map(data.catalog.map((entry) => [entry.id, entry]));
+  const owned = profile.locks.filter((lock) => lock.status === "Owned");
+  const mechanisms = new Set(
+    owned.flatMap((lock) => lock.mechanisms.map((name) => name.toLocaleLowerCase("en-US"))),
+  );
+  const features = new Set(
+    owned.flatMap((lock) =>
+      (catalog.get(lock.id)?.features ?? []).map((name) => name.toLocaleLowerCase("en-US")),
+    ),
+  );
+  return profile.locks
+    .filter((lock) => lock.status === "Wishlist")
+    .flatMap((lock) => {
+      const entry = catalog.get(lock.id);
+      if (!entry) return [];
+      const newMechanisms = lock.mechanisms.filter(
+        (name) => !mechanisms.has(name.toLocaleLowerCase("en-US")),
+      );
+      const newFeatures = [...new Set(entry.features ?? [])].filter(
+        (name) => !features.has(name.toLocaleLowerCase("en-US")),
+      );
+      return [{ lock, entry, newMechanisms, newFeatures }];
+    })
+    .sort(
+      (a, b) =>
+        b.newMechanisms.length - a.newMechanisms.length ||
+        b.newFeatures.length - a.newFeatures.length ||
+        a.lock.name.localeCompare(b.lock.name),
+    );
 }

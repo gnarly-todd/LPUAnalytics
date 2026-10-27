@@ -12,7 +12,7 @@
     "lint": "oxlint app github-pages scripts next.config.ts vite.config.ts vite.github-pages.config.ts --format=github",
     "format": "oxfmt",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/test-profile-loading.cjs && node scripts/test-owner-loading.cjs && node scripts/test-screen-navigation.cjs && node scripts/test-wishlist-export.cjs && node services/lpu-profile-relay/scripts/test-relay.mjs && node scripts/test-audit-regressions.cjs"
+    "test": "node scripts/test-profile-loading.cjs && node scripts/test-owner-loading.cjs && node scripts/test-screen-navigation.cjs && node scripts/test-wishlist-export.cjs && node services/lpu-profile-relay/scripts/test-relay.mjs && node scripts/test-audit-regressions.cjs && node scripts/test-learning.cjs"
   },
   "dependencies": {
     "fflate": "0.7.5",
