@@ -187,7 +187,7 @@
   font-size: 13px;
 }
 .site-shell .filter-bar {
-  grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.8fr) repeat(4, minmax(0, 1fr));
   gap: 16px;
   padding: 16px;
   border-radius: var(--card-radius);
@@ -397,7 +397,7 @@
     width: 100%;
   }
   .site-shell .filter-bar {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .site-shell .filter-bar .search-field {
     grid-column: 1 / -1;
