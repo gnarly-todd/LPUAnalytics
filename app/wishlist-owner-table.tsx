@@ -40,6 +40,9 @@ export default function WishlistOwnerTable({
 }) {
   const { data: insightData } = useCommunityInsights();
   const scanRequested = useRef(false);
+  const moreDialog = useRef<HTMLDialogElement | null>(null);
+  const [moreCount, setMoreCount] = useState("50");
+  const [moreError, setMoreError] = useState("");
   const [resumeAt, setResumeAt] = useState(0);
   const [pauseMessage, setPauseMessage] = useState("");
   const forceRefresh = useRef(false);
@@ -69,6 +72,8 @@ export default function WishlistOwnerTable({
     count: TOP_OWNER_LIMIT,
   }));
   useEffect(() => {
+    setResumeAt(0);
+    setPauseMessage("");
     setScope({ profileId: activeProfile.id, count: readOwnerScope(activeProfile.id) });
   }, [activeProfile.id]);
   const requestedCount =
@@ -79,20 +84,7 @@ export default function WishlistOwnerTable({
   );
 
   useEffect(() => {
-    if (!resumeAt) return;
-    const timer = window.setTimeout(
-      () => {
-        setResumeAt(0);
-        setPauseMessage("");
-        setRefresh((value) => value + 1);
-      },
-      Math.max(1000, resumeAt - Date.now()),
-    );
-    return () => window.clearTimeout(timer);
-  }, [resumeAt]);
-
-  useEffect(() => {
-    if (loading || paused || resumeAt > Date.now()) {
+    if (loading || paused) {
       setScanBusy(false);
       return;
     }
@@ -136,6 +128,8 @@ export default function WishlistOwnerTable({
     const signal = controller.signal;
     const force = forceRefresh.current;
     forceRefresh.current = false;
+    setResumeAt(0);
+    setPauseMessage("");
     setErrors({});
     setDirectoryError("");
     setProcessed(0);
@@ -152,29 +146,54 @@ export default function WishlistOwnerTable({
       setDirectory(top);
       const candidates = selectOwnerCandidates(top.profiles, activeProfile.id, requestedCount);
       const resolved = new Map<string, { fetchedAt: number; profile: WishlistProfile }>();
-      await loadOwnerSnapshots(candidates, {
-        signal,
-        force,
-        onProgress: (progress) => {
-          setLoaded(
-            progress.snapshots.map((snapshot) => {
-              const previous = resolved.get(snapshot.id);
-              if (previous?.fetchedAt === snapshot.fetchedAt) return previous.profile;
-              const profile = snapshotProfile(snapshot);
-              resolved.set(snapshot.id, { fetchedAt: snapshot.fetchedAt, profile });
-              return profile;
-            }),
+      const completed = new Set<string>();
+      while (!signal.aborted) {
+        const result = await loadOwnerSnapshots(candidates, {
+          completed,
+          signal,
+          force,
+          onProgress: (progress) => {
+            setLoaded(
+              progress.snapshots.map((snapshot) => {
+                const previous = resolved.get(snapshot.id);
+                if (previous?.fetchedAt === snapshot.fetchedAt) return previous.profile;
+                const profile = snapshotProfile(snapshot);
+                resolved.set(snapshot.id, { fetchedAt: snapshot.fetchedAt, profile });
+                return profile;
+              }),
+            );
+            setErrors(progress.errors);
+            setProcessed(progress.processed);
+            setCacheCount(progress.cached);
+            setFreshCount(progress.fresh);
+            if (progress.rateLimit) {
+              setResumeAt(progress.rateLimit.retryAt);
+              setPauseMessage(progress.rateLimit.message);
+            }
+          },
+        });
+        if (!result.rateLimit || signal.aborted) break;
+        const retryAt = result.rateLimit.retryAt;
+        setResumeAt(retryAt);
+        setPauseMessage(result.rateLimit.message);
+        await new Promise<void>((resolve, reject) => {
+          const abort = () => {
+            window.clearTimeout(timer);
+            reject(signal.reason);
+          };
+          const timer = window.setTimeout(
+            () => {
+              signal.removeEventListener("abort", abort);
+              resolve();
+            },
+            Math.max(1000, retryAt - Date.now()),
           );
-          setErrors(progress.errors);
-          setProcessed(progress.processed);
-          setCacheCount(progress.cached);
-          setFreshCount(progress.fresh);
-          if (progress.rateLimit) {
-            setResumeAt(progress.rateLimit.retryAt);
-            setPauseMessage(progress.rateLimit.message);
-          }
-        },
-      });
+          signal.addEventListener("abort", abort, { once: true });
+          if (signal.aborted) abort();
+        });
+        setResumeAt(0);
+        setPauseMessage("");
+      }
       if (!signal.aborted) setScanBusy(false);
     }
     void run().catch((reason) => {
@@ -189,7 +208,7 @@ export default function WishlistOwnerTable({
       controller.abort();
       activity.finish();
     };
-  }, [activeProfile, loading, paused, refresh, resumeAt, requestedCount]);
+  }, [activeProfile, loading, paused, refresh, requestedCount]);
 
   const owners = useMemo(() => {
     const validIds = new Set(members.map((p) => p.id));
@@ -304,19 +323,21 @@ export default function WishlistOwnerTable({
   const ownerCount = (count: number) => (owners.length ? count : busy ? "…" : "—");
   const stateLabel = loading
     ? "Loading your profile…"
-    : busy
-      ? directory
-        ? `Checking ${processed} of ${members.length} profiles…`
-        : "Loading the leaderboard…"
-      : pauseMessage
-        ? "Waiting for the LPU request cooldown"
-        : paused
-          ? "Owner checks paused while you use profile controls"
-          : failed.length
-            ? "Some profiles could not be loaded"
-            : owners.length
-              ? `${owners.length} owner profiles loaded`
-              : "Ready when you are — load profiles to find owners";
+    : busy && pauseMessage
+      ? "Cooldown — remaining profiles will load automatically"
+      : busy
+        ? directory
+          ? `Checking ${processed} of ${members.length} profiles…`
+          : "Loading the leaderboard…"
+        : pauseMessage
+          ? "Waiting for the LPU request cooldown"
+          : paused
+            ? "Owner checks paused while you use profile controls"
+            : failed.length
+              ? "Some profiles could not be loaded"
+              : owners.length
+                ? `${owners.length} owner profiles loaded`
+                : "Ready when you are — load profiles to find owners";
 
   return (
     <section
@@ -324,13 +345,75 @@ export default function WishlistOwnerTable({
       id="wishlist-owners"
       aria-labelledby="wishlist-owner-heading"
     >
+      <dialog
+        ref={moreDialog}
+        className="profile-modal owner-load-dialog"
+        aria-labelledby="load-more-title"
+      >
+        <h2 id="load-more-title">Load more profiles</h2>
+        <p>
+          Choose how many additional ranked profiles to check. The scan automatically resumes after
+          LPU cooldowns. Keep this page open until it finishes.
+        </p>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            const additional = Number(moreCount);
+            if (
+              !/^\d+$/.test(moreCount.trim()) ||
+              !Number.isSafeInteger(additional) ||
+              additional < 1 ||
+              additional > remainingProfiles
+            ) {
+              setMoreError(`Enter a whole number from 1 to ${remainingProfiles}.`);
+              return;
+            }
+            const count = requestedCount + additional;
+            writeOwnerScope(activeProfile.id, count);
+            setScope({ profileId: activeProfile.id, count });
+            moreDialog.current?.close();
+            refreshOwners();
+          }}
+        >
+          <label htmlFor="additional-owner-count">Additional profiles</label>
+          <input
+            id="additional-owner-count"
+            type="text"
+            inputMode="numeric"
+            autoFocus
+            value={moreCount}
+            onChange={(event) => {
+              setMoreCount(event.target.value);
+              setMoreError("");
+            }}
+            aria-describedby="additional-owner-help"
+            aria-invalid={!!moreError}
+          />
+          <small id="additional-owner-help">
+            {remainingProfiles} more profiles available. Current range: {members.length}.
+          </small>
+          {moreError && <p role="alert">{moreError}</p>}
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => moreDialog.current?.close()}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="primary-button" disabled={blocked}>
+              Start loading
+            </button>
+          </div>
+        </form>
+      </dialog>
       <header className="wishlist-owner-intro">
         <p className="eyebrow">Wishlist connections</p>
         <h2 id="wishlist-owner-heading">{activeProfile.name}’s wishlist</h2>
         <p>
-          Start with the top {TOP_OWNER_LIMIT} other named public LPU collections, then fetch{" "}
-          {TOP_OWNER_LIMIT} more at a time. Your own profile is excluded. Select an owner’s name to
-          visit their LPU profile.
+          Start with the top {TOP_OWNER_LIMIT} other named public LPU collections, then choose how
+          many more to load. Your own profile is excluded. Select an owner’s name to visit their LPU
+          profile.
         </p>
       </header>
 
@@ -341,10 +424,11 @@ export default function WishlistOwnerTable({
         </div>
         <p className="wishlist-scan-help">
           Load top {requestedCount} — cache first reuses profiles saved on this device for up to 7
-          days. Fetch more adds the next ranked batch and saves each profile as it arrives. Keep
-          going to 1,000 profiles or beyond while LPU allows requests. Fetch latest refreshes your
-          selected range. Opening this screen or switching profiles reuses all valid cached owners
-          on this device.
+          days. Load more lets you choose how many additional profiles to fetch and saves each as it
+          arrives. Rate limits pause the scan; it resumes automatically after each cooldown while
+          this page stays open. Keep going to 1,000 profiles or beyond while LPU allows requests.
+          Fetch latest refreshes your selected range. Opening this screen or switching profiles
+          reuses all valid cached owners on this device.
         </p>
         <div className="wishlist-owner-toolbar">
           <div className="wishlist-owner-actions">
@@ -360,18 +444,15 @@ export default function WishlistOwnerTable({
             {directory && members.length > 0 && (
               <button
                 className="secondary-button"
-                disabled={blocked || processed < members.length || remainingProfiles === 0}
+                disabled={blocked || remainingProfiles === 0}
                 onClick={() => {
-                  const count = requestedCount + TOP_OWNER_LIMIT;
-                  writeOwnerScope(activeProfile.id, count);
-                  setScope({ profileId: activeProfile.id, count });
-                  refreshOwners();
+                  setMoreCount(String(Math.min(TOP_OWNER_LIMIT, remainingProfiles)));
+                  setMoreError("");
+                  moreDialog.current?.showModal();
                 }}
               >
                 <OwnerActionIcon kind="load" />
-                {remainingProfiles === 0
-                  ? "All ranked profiles selected"
-                  : `Fetch ${Math.min(TOP_OWNER_LIMIT, remainingProfiles)} more profiles`}
+                {remainingProfiles === 0 ? "All ranked profiles selected" : "Load more"}
               </button>
             )}
             <button
@@ -388,6 +469,8 @@ export default function WishlistOwnerTable({
                 className="secondary-button"
                 onClick={() => {
                   scanController.current?.abort();
+                  setResumeAt(0);
+                  setPauseMessage("");
                   setScanBusy(false);
                 }}
               >
@@ -450,8 +533,8 @@ export default function WishlistOwnerTable({
           <strong>Requests are temporarily limited</strong>
           <p>{pauseMessage}</p>
           <p>
-            Continue with Load top {requestedCount} after <DataTimestamp value={resumeAt} />. Loaded
-            matches remain available.
+            The remaining profiles will load automatically after <DataTimestamp value={resumeAt} />.
+            Keep this page open. Loaded matches remain available.
           </p>
         </div>
       )}

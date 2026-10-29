@@ -32,7 +32,7 @@ export const screens = [
   {
     id: "wishlist-owners",
     label: "Wishlist owners",
-    description: "Find wishlist owners in ranked profiles, loading 50 more at a time.",
+    description: "Find wishlist owners in ranked profiles, with custom load counts and automatic cooldown resumes.",
   },
   {
     id: "compare",

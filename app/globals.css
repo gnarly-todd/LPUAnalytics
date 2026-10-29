@@ -3182,3 +3182,16 @@ footer > a {
     padding: 12px;
   }
 }
+
+.owner-load-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  color: var(--text);
+  width: min(calc(100% - 32px), 540px);
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+}
+.owner-load-dialog::backdrop {
+  background: rgb(0 0 0 / 65%);
+}

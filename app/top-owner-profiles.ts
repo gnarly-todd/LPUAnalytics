@@ -309,10 +309,12 @@ export async function loadOwnerSnapshots(
   {
     signal,
     force = false,
+    completed = new Set<string>(),
     onProgress,
   }: {
     signal?: AbortSignal;
     force?: boolean;
+    completed?: Set<string>;
     onProgress?: (progress: OwnerScanProgress) => void;
   } = {},
 ): Promise<OwnerScanProgress> {
@@ -324,10 +326,12 @@ export async function loadOwnerSnapshots(
     const cached = readOwnerCache(profile.id);
     if (cached) snapshots.set(profile.id, cached);
   }
-  const pending = candidates.filter((profile) => force || !snapshots.has(profile.id));
-  const checked = new Set<string>();
+  const pending = candidates.filter(
+    (profile) => !completed.has(profile.id) && (force || !snapshots.has(profile.id)),
+  );
+  const checked = new Set([...completed].filter((id) => snapshots.has(id)));
   const errors: Record<string, string> = {};
-  let processed = force ? 0 : snapshots.size;
+  let processed = force ? checked.size : snapshots.size;
   let cursor = 0;
   let rateLimit: LpuRateLimitError | undefined;
   const progress = (): OwnerScanProgress => ({
@@ -354,6 +358,7 @@ export async function loadOwnerSnapshots(
         if (signal?.aborted) return;
         snapshots.set(profile.id, snapshot);
         checked.add(profile.id);
+        completed.add(profile.id);
         await writeOwnerCache(snapshot);
       } catch (error) {
         if (signal?.aborted) return;

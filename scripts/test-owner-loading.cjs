@@ -132,6 +132,11 @@ function environment(hooks) {
         require: localRequire,
         window: env.window,
         fetch: (...args) => env.fetch(...args),
+        Date: class extends Date {
+          static now() {
+            return Date.now() + (env.clockOffset ?? 0);
+          }
+        },
         AbortSignal,
         AbortController,
         Response,
@@ -391,6 +396,16 @@ async function componentChecks() {
   };
   const env = environment(hooks);
   const Table = env.load("app/wishlist-owner-table.tsx").default;
+  const cooldownTimers = new Set();
+  env.window.setTimeout = (callback, ms) => {
+    if (ms < 5000) return setTimeout(callback, ms);
+    const timer = { callback, ms };
+    cooldownTimers.add(timer);
+    return timer;
+  };
+  env.window.clearTimeout = (timer) => {
+    if (!cooldownTimers.delete(timer)) clearTimeout(timer);
+  };
   let activeProfile = {
     id: "selected-profile-id-000",
     name: "A very long profile name to wrap on a phone",
@@ -435,7 +450,7 @@ async function componentChecks() {
   const button = (label) =>
     nodes(tree).find((node) => node.type === "button" && text(node) === label);
   async function finishScan() {
-    const deadline = Date.now() + 5000;
+    const deadline = Date.now() + 15000;
     do {
       await wait(10);
       tree = render();
@@ -653,16 +668,24 @@ async function componentChecks() {
   await finishScan();
   tree = render();
   assert.equal(env.load("app/top-owner-profiles.ts").readOwnerDirectory().profiles.length, 1051);
-  for (let target = 150; target <= 1000; target += 50) {
+  for (let target = 550; target <= 1000; target += 450) {
     const before = env.calls;
-    const more = button("Fetch 50 more profiles");
+    const more = button("Load more");
     assert(more && !more.props.disabled, `Can extend through top ${target}`);
     more.props.onClick();
+    tree = render();
+    nodes(tree)
+      .find((n) => n.props?.id === "additional-owner-count")
+      .props.onChange({ target: { value: "450" } });
+    tree = render();
+    nodes(tree)
+      .find((n) => n.type === "form")
+      .props.onSubmit({ preventDefault() {} });
     render();
     tree = render();
     await finishScan();
     tree = render();
-    assert.equal(env.calls - before, 50, "Each click fetches only the next fifty");
+    assert.equal(env.calls - before, 450, "The popup adds the requested 450 profiles");
     assert(text(tree).includes(`${target} owner profiles loaded`));
   }
   const ownerApi = env.load("app/top-owner-profiles.ts");
@@ -730,17 +753,102 @@ async function componentChecks() {
       headers: { "Retry-After": "0" },
     });
   };
-  button("Fetch 49 more profiles").props.onClick();
-  render();
+  button("Load more").props.onClick();
   tree = render();
+  const enterMore = (value) => {
+    nodes(tree)
+      .find((n) => n.props?.id === "additional-owner-count")
+      .props.onChange({ target: { value } });
+    tree = render();
+    nodes(tree)
+      .find((n) => n.type === "form")
+      .props.onSubmit({ preventDefault() {} });
+    tree = render();
+  };
+  for (const value of ["0", "-1", "1.5", "50", "abc"]) {
+    enterMore(value);
+    assert(
+      nodes(tree).some((n) => n.props?.role === "alert"),
+      "Invalid additions are rejected",
+    );
+    assert.equal(env.calls, beforeRate);
+  }
+  enterMore("49");
+  await wait(40);
+  tree = render();
+  assert(env.calls - beforeRate <= 3);
+  assert(text(tree).includes("remaining profiles will load automatically"));
+  assert.equal(cooldownTimers.size, 1, "Exactly one cooldown timer is scheduled");
+  const pausedCalls = env.calls;
+  const resume = () => {
+    const timer = [...cooldownTimers][0];
+    cooldownTimers.delete(timer);
+    env.clockOffset = (env.clockOffset ?? 0) + timer.ms + 1;
+    timer.callback();
+  };
+  // A second cooldown pauses the same job again without a manual load.
+  resume();
+  await wait(40);
+  tree = render();
+  assert(env.calls > pausedCalls);
+  assert.equal(cooldownTimers.size, 1);
+  env.fetch = originalFetch;
+  const beforeResume = env.calls;
+  resume();
   await finishScan();
   tree = render();
-  assert(env.calls - beforeRate <= 3, "At most three in flight when LPU limits requests");
-  assert(text(tree).includes("1000 owner profiles loaded") || text(tree).includes("cooldown"));
-  assert(ownerApi.readOwnerCache(expanded[1000].id));
-  assert(button("Load top 1051 — cache first").props.disabled);
-  // Clear the scheduled cooldown to keep this network-free harness from waiting 20 minutes.
+  assert.equal(
+    env.calls - beforeResume,
+    50,
+    "Only the missing active/reserve gap and remaining 49 profiles are fetched",
+  );
+  assert(text(tree).includes("1050 owner profiles loaded"));
+  assert.equal(cooldownTimers.size, 0);
+  // Forced refresh must also skip already refreshed owners after a cooldown.
+  let allowed = 6;
+  env.fetch = async (...args) => {
+    if (!args[0].includes("/api/v1/")) return originalFetch(...args);
+    if (allowed-- > 0) return originalFetch(...args);
+    env.calls++;
+    return new Response("", { status: 429, headers: { "Retry-After": "0" } });
+  };
+  button("Fetch latest from LPU Belts").props.onClick();
+  render();
+  for (let i = 0; i < 100 && !cooldownTimers.size; i++) {
+    await wait(20);
+    tree = render();
+  }
+  assert.equal(cooldownTimers.size, 1);
+  const freshBeforeResume = env.calls;
+  env.fetch = originalFetch;
+  resume();
+  await finishScan();
+  tree = render();
+  assert.equal(
+    env.calls - freshBeforeResume,
+    1044,
+    "Forced refresh resumes only owners not yet refreshed",
+  );
+  // Stop cancels a pending timer and prevents automatic restart.
+  env.fetch = async (...args) => args[0].includes("/api/v1/")
+    ? new Response("", { status: 429, headers: { "Retry-After": "0" } })
+    : originalFetch(...args);
+  button("Fetch latest from LPU Belts").props.onClick();
+  render();
+  for (let i = 0; i < 100 && !cooldownTimers.size; i++) {
+    await wait(20);
+    tree = render();
+  }
+  assert.equal(cooldownTimers.size, 1);
+  button("Stop loading").props.onClick();
+  await wait(10);
+  tree = render();
+  assert.equal(cooldownTimers.size, 0, "Stop cancels cooldown resume");
+  assert(!button("Stop loading"));
   for (const effect of effects) effect?.cleanup?.();
+  console.log(
+    "PASS: custom 450-profile requests, invalid entry, repeated automatic cooldown resume, forced refresh continuation and Stop during cooldown.",
+  );
   console.log(
     "PASS: repeated 50-profile expansion through 1,000, no refetch of earlier batches, cache-only scope restoration, expanded export coverage, active-user exclusion and rate-limit preservation.",
   );
