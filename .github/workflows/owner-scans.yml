@@ -1,0 +1,27 @@
+name: Continue background owner scans
+on:
+  schedule:
+    - cron: '2-59/5 * * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/owner-scans.yml'
+      - 'scripts/run-owner-scans.mjs'
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: background-owner-scans
+  cancel-in-progress: false
+jobs:
+  continue-scans:
+    if: github.repository == 'gnarly-todd/LPUAnalytics' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Continue pending scans independently of visitors
+        run: node scripts/run-owner-scans.mjs

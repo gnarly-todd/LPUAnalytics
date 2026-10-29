@@ -10,6 +10,7 @@ export type TopOwnerDirectory = { profiles: TopOwner[]; updatedAt: string; fetch
 export type OwnerSnapshot = { id: string; name: string; own: string[]; fetchedAt: number };
 export const OWNER_SCAN_CONCURRENCY = 3;
 export type OwnerScanProgress = {
+  backgroundState?: string;
   snapshots: OwnerSnapshot[];
   processed: number;
   total: number;

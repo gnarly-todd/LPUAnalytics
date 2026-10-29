@@ -1,5 +1,11 @@
 "use client";
 
+import {
+  cloudScansAvailable,
+  readCloudScan,
+  loadCloudOwnerSnapshots,
+  stopCloudScan,
+} from "./cloud-owner-scans";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { beltColors, type LockRecord } from "./data";
 import { useCommunityInsights } from "./community-insights";
@@ -43,6 +49,7 @@ export default function WishlistOwnerTable({
   const moreDialog = useRef<HTMLDialogElement | null>(null);
   const [moreCount, setMoreCount] = useState("50");
   const [moreError, setMoreError] = useState("");
+  const [backgroundState, setBackgroundState] = useState("");
   const [resumeAt, setResumeAt] = useState(0);
   const [pauseMessage, setPauseMessage] = useState("");
   const forceRefresh = useRef(false);
@@ -88,7 +95,8 @@ export default function WishlistOwnerTable({
       setScanBusy(false);
       return;
     }
-    if (!scanRequested.current) {
+    const savedScan = cloudScansAvailable() ? readCloudScan(activeProfile.id) : null;
+    if (!scanRequested.current && !savedScan) {
       // Opening the page and switching profiles only read local snapshots.
       // Network requests require an explicit press of a load/fetch action.
       const cached = readOwnerDirectory();
@@ -130,6 +138,7 @@ export default function WishlistOwnerTable({
     forceRefresh.current = false;
     setResumeAt(0);
     setPauseMessage("");
+    setBackgroundState("");
     setErrors({});
     setDirectoryError("");
     setProcessed(0);
@@ -145,6 +154,24 @@ export default function WishlistOwnerTable({
       if (signal.aborted) return;
       setDirectory(top);
       const candidates = selectOwnerCandidates(top.profiles, activeProfile.id, requestedCount);
+      if (cloudScansAvailable()) {
+        await loadCloudOwnerSnapshots(activeProfile.id, candidates, {
+          force,
+          signal,
+          onProgress: (progress) => {
+            setLoaded(progress.snapshots.map(snapshotProfile));
+            setProcessed(progress.processed);
+            setCacheCount(progress.cached);
+            setFreshCount(progress.fresh);
+            setErrors(progress.errors);
+            setBackgroundState(progress.backgroundState || "");
+            setResumeAt(progress.rateLimit?.retryAt || 0);
+            setPauseMessage(progress.rateLimit?.message || "");
+          },
+        });
+        if (!signal.aborted) setScanBusy(false);
+        return;
+      }
       const resolved = new Map<string, { fetchedAt: number; profile: WishlistProfile }>();
       const completed = new Set<string>();
       while (!signal.aborted) {
@@ -323,21 +350,23 @@ export default function WishlistOwnerTable({
   const ownerCount = (count: number) => (owners.length ? count : busy ? "…" : "—");
   const stateLabel = loading
     ? "Loading your profile…"
-    : busy && pauseMessage
-      ? "Cooldown — remaining profiles will load automatically"
-      : busy
-        ? directory
-          ? `Checking ${processed} of ${members.length} profiles…`
-          : "Loading the leaderboard…"
-        : pauseMessage
-          ? "Waiting for the LPU request cooldown"
-          : paused
-            ? "Owner checks paused while you use profile controls"
-            : failed.length
-              ? "Some profiles could not be loaded"
-              : owners.length
-                ? `${owners.length} owner profiles loaded`
-                : "Ready when you are — load profiles to find owners";
+    : busy && backgroundState === "queued"
+      ? "Scan queued on the server — safe to lock your phone"
+      : busy && pauseMessage
+        ? "Cooldown — remaining profiles will load automatically"
+        : busy
+          ? directory
+            ? `Checking ${processed} of ${members.length} profiles…`
+            : "Loading the leaderboard…"
+          : pauseMessage
+            ? "Waiting for the LPU request cooldown"
+            : paused
+              ? "Owner checks paused while you use profile controls"
+              : failed.length
+                ? "Some profiles could not be loaded"
+                : owners.length
+                  ? `${owners.length} owner profiles loaded`
+                  : "Ready when you are — load profiles to find owners";
 
   return (
     <section
@@ -353,7 +382,8 @@ export default function WishlistOwnerTable({
         <h2 id="load-more-title">Load more profiles</h2>
         <p>
           Choose how many additional ranked profiles to check. The scan automatically resumes after
-          LPU cooldowns. Keep this page open until it finishes.
+          LPU cooldowns. You can minimize Safari or lock your phone; progress is saved on the
+          server.
         </p>
         <form
           onSubmit={(event) => {
@@ -425,10 +455,11 @@ export default function WishlistOwnerTable({
         <p className="wishlist-scan-help">
           Load top {requestedCount} — cache first reuses profiles saved on this device for up to 7
           days. Load more lets you choose how many additional profiles to fetch and saves each as it
-          arrives. Rate limits pause the scan; it resumes automatically after each cooldown while
-          this page stays open. Keep going to 1,000 profiles or beyond while LPU allows requests.
-          Fetch latest refreshes your selected range. Opening this screen or switching profiles
-          reuses all valid cached owners on this device.
+          arrives. Rate limits pause the scan; it resumes automatically after each cooldown, even
+          with Safari minimized or your phone locked. Keep going to 1,000 profiles or beyond while
+          LPU allows requests. Fetch latest refreshes your selected range. Opening this screen or
+          switching profiles reuses all valid cached owners on this device. The server checks queued
+          scans about every five minutes; starts and cooldown resumes can take a little longer.
         </p>
         <div className="wishlist-owner-toolbar">
           <div className="wishlist-owner-actions">
@@ -468,10 +499,22 @@ export default function WishlistOwnerTable({
               <button
                 className="secondary-button"
                 onClick={() => {
-                  scanController.current?.abort();
-                  setResumeAt(0);
-                  setPauseMessage("");
-                  setScanBusy(false);
+                  const stop = () => {
+                    scanController.current?.abort();
+                    setResumeAt(0);
+                    setPauseMessage("");
+                    setBackgroundState("");
+                    setScanBusy(false);
+                  };
+                  if (cloudScansAvailable())
+                    void stopCloudScan(activeProfile.id)
+                      .then(stop)
+                      .catch(() =>
+                        setDirectoryError(
+                          "The server scan could not be stopped. Please retry Stop loading.",
+                        ),
+                      );
+                  else stop();
                 }}
               >
                 Stop loading
@@ -534,7 +577,7 @@ export default function WishlistOwnerTable({
           <p>{pauseMessage}</p>
           <p>
             The remaining profiles will load automatically after <DataTimestamp value={resumeAt} />.
-            Keep this page open. Loaded matches remain available.
+            Your phone can remain locked. Loaded matches remain available.
           </p>
         </div>
       )}
