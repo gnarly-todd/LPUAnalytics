@@ -45,7 +45,7 @@ function environment(hooks) {
     if (!url.includes("/api/v1/")) {
       env.directoryCalls++;
       return Response.json({
-        data: [...profiles, reserveProfile].map((p) => ({
+        data: (env.directoryProfiles ?? [...profiles, reserveProfile]).map((p) => ({
           id: p.id,
           displayName: p.name,
           own: p.ownedCount,
@@ -165,7 +165,7 @@ async function queueChecks() {
   });
   assert.deepEqual(
     Array.from(ranked.profiles, (p) => p.id),
-    [...profiles, reserveProfile].map((p) => p.id),
+    [...profiles, reserveProfile].map((p) => p.id).concat("outside-top-fifty-profile"),
   );
   for (const activeId of [
     profiles[0].id,
@@ -227,6 +227,7 @@ async function queueChecks() {
     const expired = JSON.parse(store.getItem(key));
     expired.fetchedAt -= api.OWNER_CACHE_TTL + 1;
     store.setItem(key, JSON.stringify(expired));
+    await api.writeOwnerCache(expired);
   }
   env.resetBudget();
   result = await api.loadOwnerSnapshots(profiles);
@@ -245,7 +246,7 @@ async function queueChecks() {
   assert(api.readOwnerCache(profiles[0].id));
   env.window.localStorage.getItem = original;
 
-  // Top 50 fits even after recent interactive requests; the local cap still stops more work.
+  // Additional batches are not stopped by the former fixed local request cap.
   const budgetEnv = environment();
   const budgetApi = budgetEnv.load("app/top-owner-profiles.ts");
   budgetEnv.window.localStorage.setItem(
@@ -259,8 +260,9 @@ async function queueChecks() {
   assert.equal(fullScan.fresh, 50);
   assert(!fullScan.rateLimit);
   const capped = await budgetApi.loadOwnerSnapshots(profiles, { force: true });
-  assert(capped.rateLimit?.backgroundOnly);
-  assert.equal(budgetEnv.calls, 50);
+  assert(!capped.rateLimit);
+  assert.equal(capped.fresh, 50);
+  assert.equal(budgetEnv.calls, 100);
 
   const limited = environment();
   limited.fetch = async () => {
@@ -582,6 +584,71 @@ async function componentChecks() {
   html = renderToStaticMarkup(tree);
   assert(html.includes("No wishlist locks yet"));
   assert(button("Load top 50 — cache first").props.disabled);
+  // Extend the real component through twenty ranked batches, without a hard cap.
+  const expanded = Array.from({ length: 1051 }, (_, n) => ({
+    id: `public-profile-id-${String(n).padStart(4, "0")}`,
+    name: `Owner ${n}`, url: "https://lpubelts.com", ownedCount: 2000 - n,
+  }));
+  env.directoryProfiles = expanded;
+  activeProfile = { ...fullWishlist, id: expanded[0].id,
+    locks: fullWishlist.locks.slice(0, 2) };
+  tree = render();
+  button("Fetch latest from LPU Belts").props.onClick();
+  render();
+  await finishScan();
+  tree = render();
+  assert.equal(env.load("app/top-owner-profiles.ts").readOwnerDirectory().profiles.length, 1051);
+  for (let target = 100; target <= 1000; target += 50) {
+    const before = env.calls;
+    const more = button("Fetch 50 more profiles");
+    assert(more && !more.props.disabled, `Can extend through top ${target}`);
+    more.props.onClick();
+    render();
+    tree = render();
+    await finishScan();
+    tree = render();
+    assert.equal(env.calls - before, 50, "Each click fetches only the next fifty");
+    assert(text(tree).includes(`${target} owner profiles loaded`));
+  }
+  const ownerApi = env.load("app/top-owner-profiles.ts");
+  assert.equal(ownerApi.readOwnerScope(activeProfile.id), 1000);
+  assert(ownerApi.readOwnerCache(expanded[1000].id));
+  assert(!env.requests.slice(-1000).includes(expanded[0].id), "Active user excluded in all batches");
+  const beforeRestore = env.calls;
+  const thousandProfile = activeProfile;
+  activeProfile = fullWishlist;
+  render(); tree = render();
+  activeProfile = thousandProfile;
+  render(); tree = render();
+  await wait(10); tree = render();
+  assert.equal(env.calls, beforeRestore, "Restoring expanded scope never makes requests");
+  assert(button("Load top 1000 — cache first"));
+  assert(text(tree).includes("1000 owner profiles loaded"));
+  await button("Export Excel").props.onClick();
+  tree = render();
+  assert.equal(nodes(tree).filter(n => n.props?.role === "alert").map(text).join(";"), "");
+  const expandedFiles = unzipSync(new Uint8Array(await env.exports.at(-1).arrayBuffer()));
+  assert(Object.values(expandedFiles).some(bytes => strFromU8(bytes).includes("Top 1000 other named")));
+  assert(expandedFiles["xl/worksheets/sheet3.xml"], "Large owner lists have lossless continuation data");
+  for (const bytes of Object.values(expandedFiles)) {
+    for (const match of strFromU8(bytes).matchAll(/<t xml:space="preserve">(.*?)<\/t>/gs))
+      assert(match[1].replace(/&(?:amp|lt|gt|quot|apos);/g,"x").length <= 32767);
+  }
+  // Stop on LPU's real 429, preserve the first thousand, retry the same range.
+  const beforeRate = env.calls;
+  env.fetch = async () => { env.calls++; return new Response("", {
+    status: 429, headers: { "Retry-After": "0" },
+  }); };
+  button("Fetch 50 more profiles").props.onClick();
+  render(); tree = render();
+  await finishScan(); tree = render();
+  assert(env.calls - beforeRate <= 3, "At most three in flight when LPU limits requests");
+  assert(text(tree).includes("1000 owner profiles loaded") || text(tree).includes("cooldown"));
+  assert(ownerApi.readOwnerCache(expanded[1000].id));
+  assert(button("Load top 1050 — cache first").props.disabled);
+  // Clear the scheduled cooldown to keep this network-free harness from waiting 20 minutes.
+  for (const effect of effects) effect?.cleanup?.();
+  console.log("PASS: repeated 50-profile expansion through 1,000, no refetch of earlier batches, cache-only scope restoration, expanded export coverage, active-user exclusion and rate-limit preservation.");
   console.log(
     "PASS: page opening makes no requests; manual cache-first/fetch-latest actions; 30-card pagination; clear/search/sort controls; unmatched message outside desktop/mobile results; formatted Excel export; stop/retry; cached export after refresh failure; loading/empty states.",
   );

@@ -11,9 +11,12 @@ import {
 } from "./activity-status";
 import {
   fetchTopOwners,
+  hydrateOwnerCache,
   loadOwnerSnapshots,
   readOwnerCache,
   readOwnerDirectory,
+  readOwnerScope,
+  writeOwnerScope,
   selectOwnerCandidates,
   snapshotProfile,
   TOP_OWNER_LIMIT,
@@ -61,9 +64,18 @@ export default function WishlistOwnerTable({
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(30);
   const [sort, setSort] = useState<WishlistSort>({ key: "lock", direction: "asc" });
+  const [scope, setScope] = useState(() => ({
+    profileId: activeProfile.id,
+    count: TOP_OWNER_LIMIT,
+  }));
+  useEffect(() => {
+    setScope({ profileId: activeProfile.id, count: readOwnerScope(activeProfile.id) });
+  }, [activeProfile.id]);
+  const requestedCount =
+    scope.profileId === activeProfile.id ? scope.count : readOwnerScope(activeProfile.id);
   const members = useMemo(
-    () => selectOwnerCandidates(directory?.profiles ?? [], activeProfile.id),
-    [directory, activeProfile.id],
+    () => selectOwnerCandidates(directory?.profiles ?? [], activeProfile.id, requestedCount),
+    [directory, activeProfile.id, requestedCount],
   );
 
   useEffect(() => {
@@ -88,20 +100,28 @@ export default function WishlistOwnerTable({
       // Opening the page and switching profiles only read local snapshots.
       // Network requests require an explicit press of a load/fetch action.
       const cached = readOwnerDirectory();
+      let cancelled = false;
       if (cached) {
         setDirectory(cached);
-        const cachedProfiles = selectOwnerCandidates(cached.profiles, activeProfile.id).flatMap(
-          (member) => {
+        const candidates = selectOwnerCandidates(cached.profiles, activeProfile.id, requestedCount);
+        const restore = () => {
+          if (cancelled) return;
+          const cachedProfiles = candidates.flatMap((member) => {
             const snapshot = readOwnerCache(member.id);
             return snapshot ? [snapshotProfile(snapshot)] : [];
-          },
-        );
-        setLoaded(cachedProfiles);
-        setCacheCount(cachedProfiles.length);
-        setFreshCount(0);
+          });
+          setLoaded(cachedProfiles);
+          setProcessed(cachedProfiles.length);
+          setCacheCount(cachedProfiles.length);
+          setFreshCount(0);
+        };
+        restore();
+        void hydrateOwnerCache(candidates).then(restore);
       }
       setScanBusy(false);
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
     scanRequested.current = false;
     const controller = new AbortController();
@@ -123,7 +143,7 @@ export default function WishlistOwnerTable({
       const top = await fetchTopOwners(signal, force);
       if (signal.aborted) return;
       setDirectory(top);
-      const candidates = selectOwnerCandidates(top.profiles, activeProfile.id);
+      const candidates = selectOwnerCandidates(top.profiles, activeProfile.id, requestedCount);
       const resolved = new Map<string, { fetchedAt: number; profile: WishlistProfile }>();
       await loadOwnerSnapshots(candidates, {
         signal,
@@ -162,7 +182,7 @@ export default function WishlistOwnerTable({
       controller.abort();
       activity.finish();
     };
-  }, [activeProfile, loading, paused, refresh, resumeAt]);
+  }, [activeProfile, loading, paused, refresh, resumeAt, requestedCount]);
 
   const owners = useMemo(() => {
     const validIds = new Set(members.map((p) => p.id));
@@ -227,7 +247,7 @@ export default function WishlistOwnerTable({
       const bytes = wishlistOwnersWorkbook(activeProfile, owners, {
         totalProfiles: members.length,
         failedNames: failed.map((p) => p.name),
-        searchScope: `Top ${TOP_OWNER_LIMIT} other named public profiles by owned-lock count`,
+        searchScope: `Top ${members.length} other named public profiles by owned-lock count`,
         leaderboardUpdatedAt: directory.updatedAt,
         demand: { counts: insightData.demand, updatedAt: insightData.statsUpdatedAt },
       });
@@ -255,6 +275,11 @@ export default function WishlistOwnerTable({
   };
 
   const blocked = busy || loading || paused || resumeAt > Date.now() || !rows.length;
+  const remainingProfiles = Math.max(
+    0,
+    (directory?.profiles.filter((profile) => profile.id !== activeProfile.id).length ?? 0) -
+      members.length,
+  );
   const matchedLockCount = matches.filter((row) => row.owners.length > 0).length;
   const hasFilters = !!search;
   const clearFilters = () => {
@@ -296,9 +321,9 @@ export default function WishlistOwnerTable({
         <p className="eyebrow">Wishlist connections</p>
         <h2 id="wishlist-owner-heading">{activeProfile.name}’s wishlist</h2>
         <p>
-          Find locks owned by the top {TOP_OWNER_LIMIT} other named public LPU collections. If your
-          profile is in the top {TOP_OWNER_LIMIT}, the next ranked profile fills its spot. Select an
-          owner’s name to visit their LPU profile.
+          Start with the top {TOP_OWNER_LIMIT} other named public LPU collections, then fetch{" "}
+          {TOP_OWNER_LIMIT} more at a time. Your own profile is excluded. Select an owner’s name to
+          visit their LPU profile.
         </p>
       </header>
 
@@ -308,9 +333,10 @@ export default function WishlistOwnerTable({
           <span className="wishlist-scope-badge">Manual refresh · 7-day cache</span>
         </div>
         <p className="wishlist-scan-help">
-          Load top {TOP_OWNER_LIMIT} — cache first reuses profiles saved on this device for up to 7
-          days, fetching only missing or expired profiles from LPU Belts. Fetch latest from LPU
-          Belts requests fresh data for every profile. Opening this screen only reads the cache.
+          Load top {requestedCount} — cache first reuses profiles saved on this device for up to 7
+          days. Fetch more adds the next ranked batch and saves each profile as it arrives. Keep
+          going to 1,000 profiles or beyond while LPU allows requests. Fetch latest refreshes your
+          selected range. Opening this screen only reads the cache.
         </p>
         <div className="wishlist-owner-toolbar">
           <div className="wishlist-owner-actions">
@@ -321,8 +347,25 @@ export default function WishlistOwnerTable({
               aria-busy={busy}
             >
               <OwnerActionIcon kind="load" />
-              {busy ? "Loading profiles…" : `Load top ${TOP_OWNER_LIMIT} — cache first`}
+              {busy ? "Loading profiles…" : `Load top ${requestedCount} — cache first`}
             </button>
+            {directory && members.length > 0 && (
+              <button
+                className="secondary-button"
+                disabled={blocked || processed < members.length || remainingProfiles === 0}
+                onClick={() => {
+                  const count = requestedCount + TOP_OWNER_LIMIT;
+                  writeOwnerScope(activeProfile.id, count);
+                  setScope({ profileId: activeProfile.id, count });
+                  refreshOwners();
+                }}
+              >
+                <OwnerActionIcon kind="load" />
+                {remainingProfiles === 0
+                  ? "All ranked profiles selected"
+                  : `Fetch ${Math.min(TOP_OWNER_LIMIT, remainingProfiles)} more profiles`}
+              </button>
+            )}
             <button
               className="secondary-button"
               onClick={() => refreshOwners(true)}
@@ -399,8 +442,8 @@ export default function WishlistOwnerTable({
           <strong>Requests are temporarily limited</strong>
           <p>{pauseMessage}</p>
           <p>
-            Try Load top {TOP_OWNER_LIMIT} after <DataTimestamp value={resumeAt} />. Loaded matches
-            remain available.
+            Continue with Load top {requestedCount} after <DataTimestamp value={resumeAt} />. Loaded
+            matches remain available.
           </p>
         </div>
       )}
@@ -458,7 +501,7 @@ export default function WishlistOwnerTable({
               <dt>Profiles loaded</dt>
               <dd>
                 {owners.length}
-                <span> / {directory ? members.length : TOP_OWNER_LIMIT}</span>
+                <span> / {directory ? members.length : requestedCount}</span>
               </dd>
               <dd className="wishlist-metric-note">Your own profile is excluded</dd>
             </div>
@@ -739,16 +782,16 @@ export default function WishlistOwnerTable({
             <summary>About coverage, data freshness &amp; export</summary>
             <div>
               <p>
-                Matches cover only the top {directory ? members.length : TOP_OWNER_LIMIT} other
-                named public leaderboard profiles, not every LPU account. Your profile is excluded
-                before selecting the {TOP_OWNER_LIMIT} profiles to check. Ownership does not imply
-                willingness to sell or trade.
+                Matches cover only the top {directory ? members.length : requestedCount} other named
+                public leaderboard profiles, not every LPU account. Your profile is excluded before
+                selecting the ranked profiles to check. Ownership does not imply willingness to sell
+                or trade.
               </p>
               <p>
                 Ownership is saved in this browser for up to 7 days. Fetch latest from LPU Belts
-                refreshes every ranked profile; Load top {TOP_OWNER_LIMIT} — cache first reuses
-                valid saved results and fetches missing or expired profiles from LPU Belts. Excel
-                exports every wishlist lock and all loaded matches, regardless of filters, including
+                refreshes the selected range; Load top {requestedCount} — cache first reuses valid
+                saved results and fetches missing or expired profiles from LPU Belts. Excel exports
+                every wishlist lock and all loaded matches, regardless of filters, including
                 coverage and each owner’s original fetch time.
               </p>
               <dl>

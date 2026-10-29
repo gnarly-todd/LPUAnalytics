@@ -116,7 +116,7 @@ function worksheet(
   first: boolean,
 ) {
   const lastColumn = column(headers.length - 1);
-  const presentationColumn = first ? lastColumn : "H";
+  const presentationColumn = first || headers.length < 8 ? lastColumn : "H";
   const end = Math.max(9, data.length + 8);
   const summary = first
     ? row(
@@ -238,6 +238,36 @@ export function wishlistOwnersWorkbook(
     wishlistHeights.push(Math.min(409, baseHeight));
     matchHeights.push(Math.min(409, Math.max(baseHeight, Math.ceil(names.length / 70) * 16 + 12)));
   });
+  // Excel limits text cells to 32,767 characters. Preserve long owner lists and
+  // source URLs in ordered continuation rows rather than failing large exports.
+  const overflowHeaders = ["Source sheet", "Source cell", "Part", "Full value (continued)"];
+  const overflow: Cell[][] = [];
+  for (const [sheetName, data] of [
+    ["Wishlist", wishlist],
+    ["Owner matches", matches],
+  ] as const) {
+    data.forEach((cells, rowIndex) =>
+      cells.forEach((item, colIndex) => {
+        if (typeof item.value !== "string" || text(item.value).length <= 32767) return;
+        const value = text(item.value);
+        const address = `${column(colIndex)}${rowIndex + 9}`;
+        let part = 0;
+        for (let offset = 0; offset < value.length;) {
+          let end = Math.min(offset + 30000, value.length);
+          if (end < value.length && /[\uD800-\uDBFF]/.test(value[end - 1])) end--;
+          overflow.push([
+            { value: sheetName, style: "body" },
+            { value: address, style: "body" },
+            { value: ++part, style: "number" },
+            { value: value.slice(offset, end), style: "wrapped" },
+          ]);
+          offset = end;
+        }
+        item.value = `See Overflow details: ${sheetName}!${address} (${part} parts).`;
+      }),
+    );
+  }
+  const sheetNumbers = overflow.length ? [1, 2, 3] : [1, 2];
   const coverage = `${loadedCount} of ${options.totalProfiles} profiles loaded${options.failedNames.length ? `; ${options.failedNames.length} failed` : ""}`;
   const files: Record<string, Uint8Array> = {};
   const add = (name: string, xml: string) => {
@@ -245,7 +275,7 @@ export function wishlistOwnersWorkbook(
   };
   add(
     "[Content_Types].xml",
-    `${xmlHeader}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${[1, 2].map((n) => `<Override PartName="/xl/worksheets/sheet${n}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/tables/table${n}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>`).join("")}</Types>`,
+    `${xmlHeader}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheetNumbers.map((n) => `<Override PartName="/xl/worksheets/sheet${n}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/tables/table${n}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/>`).join("")}</Types>`,
   );
   add(
     "_rels/.rels",
@@ -253,11 +283,11 @@ export function wishlistOwnersWorkbook(
   );
   add(
     "xl/workbook.xml",
-    `${xmlHeader}<workbook xmlns="${namespace}" xmlns:r="${relationships}"><bookViews><workbookView activeTab="0"/></bookViews><sheets><sheet name="Wishlist" sheetId="1" r:id="sheet1"/><sheet name="Owner matches" sheetId="2" r:id="sheet2"/></sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`,
+    `${xmlHeader}<workbook xmlns="${namespace}" xmlns:r="${relationships}"><bookViews><workbookView activeTab="0"/></bookViews><sheets><sheet name="Wishlist" sheetId="1" r:id="sheet1"/><sheet name="Owner matches" sheetId="2" r:id="sheet2"/>${overflow.length ? '<sheet name="Overflow details" sheetId="3" r:id="sheet3"/>' : ""}</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`,
   );
   add(
     "xl/_rels/workbook.xml.rels",
-    `${xmlHeader}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${[1, 2].map((n) => `<Relationship Id="sheet${n}" Type="${relationships}/worksheet" Target="worksheets/sheet${n}.xml"/>`).join("")}<Relationship Id="styles" Type="${relationships}/styles" Target="styles.xml"/></Relationships>`,
+    `${xmlHeader}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheetNumbers.map((n) => `<Relationship Id="sheet${n}" Type="${relationships}/worksheet" Target="worksheets/sheet${n}.xml"/>`).join("")}<Relationship Id="styles" Type="${relationships}/styles" Target="styles.xml"/></Relationships>`,
   );
   add("xl/styles.xml", exportStyles.xml);
   add(
@@ -292,9 +322,33 @@ export function wishlistOwnersWorkbook(
       false,
     ),
   );
-  [wishlistHeaders, matchHeaders].forEach((headers, i) => {
+  if (overflow.length)
+    add(
+      "xl/worksheets/sheet3.xml",
+      worksheet(
+        overflowHeaders,
+        [22, 18, 10, 100],
+        "Complete owner data",
+        [
+          "Values longer than Excel’s cell limit continue here without losing data.",
+          "Filter by Source sheet and Source cell, then read parts in order.",
+          coverage,
+        ],
+        overflow,
+        overflow.map(() => 60),
+        false,
+      ),
+    );
+  const tables = [
+    { headers: wishlistHeaders, name: "Wishlist", count: records.length },
+    { headers: matchHeaders, name: "Matches", count: records.length },
+    ...(overflow.length
+      ? [{ headers: overflowHeaders, name: "OverflowDetails", count: overflow.length }]
+      : []),
+  ];
+  tables.forEach(({ headers, name, count }, i) => {
     const n = i + 1;
-    add(`xl/tables/table${n}.xml`, table(n, i ? "Matches" : "Wishlist", headers, records.length));
+    add(`xl/tables/table${n}.xml`, table(n, name, headers, count));
     add(
       `xl/worksheets/_rels/sheet${n}.xml.rels`,
       `${xmlHeader}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="table" Type="${relationships}/table" Target="../tables/table${n}.xml"/></Relationships>`,

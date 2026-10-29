@@ -138,15 +138,17 @@ assert(safeXml.includes('t="inlineStr"><is><t xml:space="preserve">=HYPERLINK'))
 assert(!safeXml.includes("<f>HYPERLINK"));
 const emptyFiles = unzipSync(wishlistOwnersWorkbook({ ...active, locks: [] }, [], options));
 assert(strFromU8(emptyFiles["xl/tables/table1.xml"]).includes('ref="A8:I9"'));
-assert.throws(
-  () =>
-    wishlistOwnersWorkbook(
-      { ...active, locks: [{ ...locks[0], name: "x".repeat(32768) }] },
-      [],
-      options,
-    ),
-  /text limit/,
-);
+const longFiles = unzipSync(wishlistOwnersWorkbook(
+  { ...active, locks: [{ ...locks[0], name: "x".repeat(32768) }] }, [], options,
+));
+assert(strFromU8(longFiles["xl/workbook.xml"]).includes('name="Overflow details"'));
+const continuation = strFromU8(longFiles["xl/worksheets/sheet3.xml"]);
+const parts = [...continuation.matchAll(/<c r="D(\d+)"[^>]*><is><t xml:space="preserve">(.*?)<\/t><\/is><\/c>/gs)]
+  .filter(match => Number(match[1]) >= 9).map(match => match[2]);
+assert(parts.every(part => part.length <= 30000));
+assert.equal(parts.join("").length, 32768, "Complete shared long name is retained");
+assert(parts.every(part => /^x+$/.test(part)));
+assert(strFromU8(longFiles["xl/worksheets/sheet1.xml"]).includes("See Overflow details"));
 if (process.argv[2]) fs.writeFileSync(path.resolve(process.argv[2]), bytes);
 console.log(
   "PASS: two native Excel sheets, one row per lock, all owners and unmatched locks, belt order, canonical counts, linked formulas, statuses, table filters, frozen panes, partial coverage, empty export, XML escaping and literal user text.",

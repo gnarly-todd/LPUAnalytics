@@ -7,7 +7,6 @@ const PUBLIC_COLLECTIONS = ["own", "wishlist", "picked", "recorded", "recordedLo
 export function createRelay({ fetchUpstream = fetch, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {}) {
   const cache = new Map();
   const pending = new Map();
-  const budgets = new Map();
   let cooldownUntil = 0;
   const retryAt = (headers) => {
     const value = headers.get("retry-after");
@@ -15,16 +14,7 @@ export function createRelay({ fetchUpstream = fetch, now = Date.now, sleep = (ms
     const date = Number.isFinite(numeric) ? now() + Math.max(0, numeric) * 1000 : Date.parse(value || "");
     return Number.isFinite(date) && date > now() ? date : now() + WINDOW_MS;
   };
-  function consume(ip) {
-    let budget = budgets.get(ip);
-    if (!budget || budget.until <= now()) budget = { count: 0, until: now() + WINDOW_MS };
-    if (budget.count >= 60) return budget.until;
-    if (budgets.size >= 1000 && !budgets.has(ip)) budgets.delete(budgets.keys().next().value);
-    budget.count++;
-    budgets.set(ip, budget);
-    return 0;
-  }
-  async function readProfile(id, ip) {
+  async function readProfile(id) {
     const saved = cache.get(id);
     if (saved?.until > now()) return saved.result;
     if (cooldownUntil > now()) return { status: 429, body: { message: "LPU requests are temporarily limited. Saved results remain available.", retryAt: cooldownUntil } };
@@ -32,8 +22,6 @@ export function createRelay({ fetchUpstream = fetch, now = Date.now, sleep = (ms
     const work = (async () => {
       for (let attempt = 0; attempt < 2; attempt++) {
         if (cooldownUntil > now()) return { status: 429, body: { message: "LPU requests are temporarily limited.", retryAt: cooldownUntil } };
-        const localPause = consume(ip);
-        if (localPause) return { status: 429, body: { message: "Profile checks are paused to limit upstream requests.", retryAt: localPause } };
         let response;
         try {
           response = await fetchUpstream(UPSTREAM + encodeURIComponent(id), { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(20_000), redirect: "manual" });
@@ -79,7 +67,7 @@ export function createRelay({ fetchUpstream = fetch, now = Date.now, sleep = (ms
       if (request.method !== "GET") return reply({ message: "Only public profile reads are supported." }, 405, { Allow: "GET, OPTIONS" });
       const id = url.searchParams.get("userId") || "";
       if (!/^[A-Za-z0-9_-]{20,128}$/.test(id)) return reply({ message: "A valid public LPU user ID is required." }, 400);
-      const result = await readProfile(id, request.headers.get("cf-connecting-ip") || "unknown");
+      const result = await readProfile(id);
       return reply(result.body, result.status, {
         ...(result.fetchedAt ? { "X-LPU-Fetched-At": String(result.fetchedAt) } : {}),
         ...(result.body.retryAt ? { "Retry-After": String(Math.max(1, Math.ceil((result.body.retryAt - now()) / 1000))) } : {}),

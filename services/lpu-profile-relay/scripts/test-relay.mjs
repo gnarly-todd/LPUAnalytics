@@ -24,12 +24,12 @@ assert.equal((await limited.fetch(request('another-public-profile-id-001'))).sta
 clock+=61000;assert.equal((await limited.fetch(request())).status,200);assert.equal(limitedCalls,2);
 let budgetCalls=0;
 const budget=createRelay({sleep:async()=>{},fetchUpstream:async url=>{budgetCalls++;return Response.json(payload(url.split('/').at(-1)));}});
-for(let n=0;n<60;n++)assert.equal((await budget.fetch(request('budget-public-profile-'+String(n).padStart(4,'0')))).status,200);
-assert.equal((await budget.fetch(request('budget-public-profile-0060'))).status,429);assert.equal(budgetCalls,60);
+for(let n=0;n<1000;n++)assert.equal((await budget.fetch(request('budget-public-profile-'+String(n).padStart(4,'0')))).status,200);
+assert.equal(budgetCalls,1000);
 const invalid=createRelay({fetchUpstream:async()=>Response.json({data:{userId:id,collections:{own:[],wishlist:[]}}})});assert.equal((await invalid.fetch(request())).status,502);
 let failures=0;
 const failed=createRelay({sleep:async()=>{},fetchUpstream:async()=>{failures++;throw new TypeError('Network failed');}});assert.equal((await failed.fetch(request())).status,502);assert.equal(failures,2);
-console.log('PASS: fixed upstream, ID/origin/method validation, CORS/preflight, request coalescing, 30-second cache, preserved fetch timestamp, public-field filtering, per-client budget, upstream cooldown and bounded retries.');
+console.log('PASS: fixed upstream, ID/origin/method validation, CORS/preflight, request coalescing, 30-second cache, preserved fetch timestamp, public-field filtering, 1,000 sequential profiles without a local count cap, upstream cooldown and bounded retries.');
 if(process.argv.includes('--live')){
  const live=createRelay();const res=await live.fetch(request('84dULJFIN4bHIC1LxCiuvBCSqT43'));assert.equal(res.status,200);const data=(await res.json()).data;console.log(JSON.stringify({status:res.status,owned:data.collections.own.length,wishlist:data.collections.wishlist.length,picked:data.collections.picked.length,cors:res.headers.get('access-control-allow-origin')}));
 }

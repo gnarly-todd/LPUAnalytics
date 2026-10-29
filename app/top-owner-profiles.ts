@@ -3,8 +3,7 @@ import type { WishlistProfile } from "./wishlist-owner-utils";
 import { fetchLpuUser, LpuRateLimitError } from "./lpu-request";
 
 export const TOP_OWNER_LIMIT = 50;
-// Keep the next ranked profile available when the active user is in the Top 50.
-const OWNER_DIRECTORY_LIMIT = TOP_OWNER_LIMIT + 1;
+// Fifty is a batch size, not a cap on the ranked directory or accumulated scan.
 export const OWNER_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 export type TopOwner = { id: string; name: string; url: string; ownedCount: number };
 export type TopOwnerDirectory = { profiles: TopOwner[]; updatedAt: string; fetchedAt?: number };
@@ -39,14 +38,39 @@ export function selectTopOwners(value: unknown): TopOwnerDirectory {
       ownedCount: counts.get(p.id)!,
       url: `https://lpubelts.com/#/profile/${p.id}?name=${encodeURIComponent(p.displayName)}`,
     }))
-    .sort((a, b) => b.ownedCount - a.ownedCount || a.id.localeCompare(b.id))
-    .slice(0, OWNER_DIRECTORY_LIMIT);
+    .sort((a, b) => b.ownedCount - a.ownedCount || a.id.localeCompare(b.id));
   if (!profiles.length) throw new Error("The public leaderboard has no named ownership profiles.");
   return { profiles, updatedAt: data.metadata?.updatedDateTime ?? "Not supplied" };
 }
 
-export function selectOwnerCandidates(profiles: TopOwner[], activeProfileId: string): TopOwner[] {
-  return profiles.filter((profile) => profile.id !== activeProfileId).slice(0, TOP_OWNER_LIMIT);
+export function selectOwnerCandidates(
+  profiles: TopOwner[],
+  activeProfileId: string,
+  count = TOP_OWNER_LIMIT,
+): TopOwner[] {
+  return profiles.filter((profile) => profile.id !== activeProfileId).slice(0, count);
+}
+
+export function readOwnerScope(profileId: string): number {
+  for (const storage of ["localStorage", "sessionStorage"] as const) {
+    try {
+      const count = Number(window[storage].getItem(`lpu-owner-scope-v1-${profileId}`));
+      if (Number.isSafeInteger(count) && count >= TOP_OWNER_LIMIT) return count;
+    } catch {
+      /* Try the other cache. */
+    }
+  }
+  return TOP_OWNER_LIMIT;
+}
+
+export function writeOwnerScope(profileId: string, count: number) {
+  for (const storage of ["localStorage", "sessionStorage"] as const) {
+    try {
+      window[storage].setItem(`lpu-owner-scope-v1-${profileId}`, String(count));
+    } catch {
+      /* Loaded results remain usable when browser storage is unavailable. */
+    }
+  }
 }
 
 export async function fetchTopOwners(
@@ -68,7 +92,7 @@ export async function fetchTopOwners(
   const directory = { ...selectTopOwners(await response.json()), fetchedAt: Date.now() };
   for (const storage of ["localStorage", "sessionStorage"] as const) {
     try {
-      window[storage].setItem("lpu-owner-directory-v3", JSON.stringify(directory));
+      window[storage].setItem("lpu-owner-directory-v4", JSON.stringify(directory));
     } catch {
       /* The manual scan still works without persistent storage. */
     }
@@ -79,7 +103,7 @@ export async function fetchTopOwners(
 export function readOwnerDirectory(): TopOwnerDirectory | null {
   for (const storage of ["localStorage", "sessionStorage"] as const) {
     try {
-      const value = JSON.parse(window[storage].getItem("lpu-owner-directory-v3") || "null");
+      const value = JSON.parse(window[storage].getItem("lpu-owner-directory-v4") || "null");
       if (
         !value ||
         !Array.isArray(value.profiles) ||
@@ -99,7 +123,7 @@ export function readOwnerDirectory(): TopOwnerDirectory | null {
       )
         continue;
       return {
-        profiles: value.profiles.slice(0, OWNER_DIRECTORY_LIMIT),
+        profiles: value.profiles,
         updatedAt: value.updatedAt,
         ...(Number.isFinite(value.fetchedAt) ? { fetchedAt: value.fetchedAt } : {}),
       };
@@ -144,13 +168,82 @@ export function snapshotProfile(snapshot: OwnerSnapshot): WishlistProfile {
   };
 }
 
+// IndexedDB keeps larger scans durable without Web Storage's small size limit.
+// Web Storage remains readable for existing caches and restricted browsers.
+const ownerMemory = new Map<string, OwnerSnapshot>();
+let ownerDatabase: Promise<IDBDatabase | null> | undefined;
+function openOwnerDatabase(): Promise<IDBDatabase | null> {
+  if (!ownerDatabase)
+    ownerDatabase = new Promise((resolve) => {
+      try {
+        if (!window.indexedDB) {
+          resolve(null);
+          return;
+        }
+        const request = window.indexedDB.open("lpu-owner-snapshots-v1", 1);
+        request.onupgradeneeded = () => {
+          request.result.createObjectStore("snapshots", { keyPath: "id" });
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = request.onblocked = () => resolve(null);
+      } catch {
+        resolve(null);
+      }
+    });
+  return ownerDatabase;
+}
+
+export async function hydrateOwnerCache(profiles: TopOwner[]): Promise<void> {
+  const database = await openOwnerDatabase();
+  if (!database || !profiles.length) return;
+  await new Promise<void>((resolve) => {
+    try {
+      const transaction = database.transaction("snapshots", "readonly");
+      const store = transaction.objectStore("snapshots");
+      for (const { id } of profiles) {
+        const request = store.get(id);
+        request.onsuccess = () => {
+          const snapshot = request.result as OwnerSnapshot | undefined;
+          if (
+            snapshot?.id === id &&
+            (!ownerMemory.has(id) || snapshot.fetchedAt > ownerMemory.get(id)!.fetchedAt)
+          )
+            ownerMemory.set(id, snapshot);
+        };
+      }
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = transaction.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+async function persistOwnerSnapshot(snapshot: OwnerSnapshot): Promise<void> {
+  const database = await openOwnerDatabase();
+  if (!database) return;
+  await new Promise<void>((resolve) => {
+    try {
+      const transaction = database.transaction("snapshots", "readwrite");
+      transaction.objectStore("snapshots").put(snapshot);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = transaction.onabort = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
 export function readOwnerCache(id: string): OwnerSnapshot | null {
   let newest: OwnerSnapshot | null = null;
-  for (const storage of ["localStorage", "sessionStorage"] as const) {
+  for (const storage of ["memory", "localStorage", "sessionStorage"] as const) {
     try {
-      const data = JSON.parse(
-        window[storage].getItem(`lpu-top-owner-v1-${id}`) || "null",
-      ) as OwnerSnapshot | null;
+      const data =
+        storage === "memory"
+          ? ownerMemory.get(id)
+          : (JSON.parse(
+              window[storage].getItem(`lpu-top-owner-v1-${id}`) || "null",
+            ) as OwnerSnapshot | null);
       const age = Date.now() - (data?.fetchedAt ?? 0);
       if (
         data?.id === id &&
@@ -172,7 +265,8 @@ export function readOwnerCache(id: string): OwnerSnapshot | null {
   return newest;
 }
 
-export function writeOwnerCache(snapshot: OwnerSnapshot) {
+export function writeOwnerCache(snapshot: OwnerSnapshot): Promise<void> {
+  ownerMemory.set(snapshot.id, snapshot);
   for (const storage of ["localStorage", "sessionStorage"] as const) {
     try {
       window[storage].setItem(`lpu-top-owner-v1-${snapshot.id}`, JSON.stringify(snapshot));
@@ -180,6 +274,7 @@ export function writeOwnerCache(snapshot: OwnerSnapshot) {
       /* A failed cache write must not discard loaded results. */
     }
   }
+  return persistOwnerSnapshot(snapshot);
 }
 
 export async function fetchOwnerSnapshot(id: string, signal?: AbortSignal): Promise<OwnerSnapshot> {
@@ -206,10 +301,9 @@ export async function loadOwnerSnapshots(
     onProgress?: (progress: OwnerScanProgress) => void;
   } = {},
 ): Promise<OwnerScanProgress> {
-  const candidates = [...new Map(profiles.map((profile) => [profile.id, profile])).values()].slice(
-    0,
-    TOP_OWNER_LIMIT,
-  );
+  const candidates = [...new Map(profiles.map((profile) => [profile.id, profile])).values()];
+  await hydrateOwnerCache(candidates);
+  signal?.throwIfAborted();
   const snapshots = new Map<string, OwnerSnapshot>();
   for (const profile of candidates) {
     const cached = readOwnerCache(profile.id);
@@ -245,7 +339,7 @@ export async function loadOwnerSnapshots(
         if (signal?.aborted) return;
         snapshots.set(profile.id, snapshot);
         checked.add(profile.id);
-        writeOwnerCache(snapshot);
+        await writeOwnerCache(snapshot);
       } catch (error) {
         if (signal?.aborted) return;
         if (error instanceof LpuRateLimitError) {
@@ -260,8 +354,8 @@ export async function loadOwnerSnapshots(
       publish();
     }
   }
-  // The existing shared request budget and Retry-After cooldown still apply to
-  // every attempt. Bounded concurrency removes serial network wait, not limits.
+  // Every batch shares LPU’s Retry-After cooldown. Keep only three requests
+  // in flight, regardless of how far the user expands their scan.
   await Promise.all(
     Array.from({ length: Math.min(OWNER_SCAN_CONCURRENCY, pending.length) }, worker),
   );

@@ -1,9 +1,7 @@
 // LPU's user API is shared by profile controls and the background owner scan.
-// Reserve capacity for interactive use and always honor the provider's cooldown.
+// Honor the provider’s cooldown across tabs and both profile and owner requests.
 const STATE_KEY = "lpu-request-budget-v1";
 const WINDOW_MS = 20 * 60 * 1000;
-// Allow one Top 50 scan plus ten recent requests within the shared window.
-const BACKGROUND_LIMIT = 60;
 type Budget = { retryAt: number; attempts: number[] };
 let memory: Budget = { retryAt: 0, attempts: [] };
 
@@ -64,8 +62,6 @@ export function recordLpuCooldown(retryAt: number) {
 export function checkLpuBudget(background = false) {
   const budget = readBudget();
   if (budget.retryAt > Date.now()) throw new LpuRateLimitError(budget.retryAt);
-  if (background && budget.attempts.length >= BACKGROUND_LIMIT)
-    throw new LpuRateLimitError(budget.attempts[0] + WINDOW_MS + 1000, true);
 }
 
 export async function fetchLpuUser(
