@@ -67,6 +67,14 @@ function clearScan(profileId: string) {
     }
   }
 }
+class ScanRequestError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+  ) {
+    super(message);
+  }
+}
 async function request(url: string, init: RequestInit = {}) {
   const response = await fetch(url, {
     ...init,
@@ -75,9 +83,12 @@ async function request(url: string, init: RequestInit = {}) {
       : AbortSignal.timeout(30_000),
     cache: "no-store",
   });
-  const body = (await response.json()) as CloudStatus;
+  const body = (await response.json().catch(() => ({}))) as CloudStatus;
   if (!response.ok)
-    throw new Error(body.message || `Background scan service returned ${response.status}.`);
+    throw new ScanRequestError(
+      body.message || `Background scan service returned ${response.status}.`,
+      response.status,
+    );
   return body;
 }
 export async function stopCloudScan(profileId: string): Promise<void> {
@@ -172,7 +183,28 @@ export async function loadCloudOwnerSnapshots(
     // Save before POST: reopening can retry the same idempotent submission.
     saveScan(profileId, job);
   }
-  await request(ENDPOINT, {
+  const reconnectingRequest = async (url: string, init: RequestInit) => {
+    for (;;) {
+      try {
+        return await request(url, init);
+      } catch (reason) {
+        if (signal.aborted) throw reason;
+        if (
+          reason instanceof ScanRequestError &&
+          reason.status >= 400 &&
+          reason.status < 500 &&
+          ![408, 429].includes(reason.status)
+        ) {
+          if (reason.status === 404) clearScan(profileId);
+          throw reason;
+        }
+        // Safari can discard an in-flight request while the phone is locked.
+        // Reconnect to the same durable job without starting another scan.
+        await waitForUpdate(signal);
+      }
+    }
+  };
+  await reconnectingRequest(ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(job),
@@ -180,7 +212,7 @@ export async function loadCloudOwnerSnapshots(
   });
   let cursor = 0;
   while (!signal.aborted) {
-    const status = await request(`${ENDPOINT}/${job.id}?cursor=${cursor}`, { signal });
+    const status = await reconnectingRequest(`${ENDPOINT}/${job.id}?cursor=${cursor}`, { signal });
     if (
       !Array.isArray(status.snapshots) ||
       !Number.isSafeInteger(status.nextCursor) ||

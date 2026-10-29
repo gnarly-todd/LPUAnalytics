@@ -32,6 +32,7 @@ const origin = "https://todd-lpu-profile-relay.nicelife70117.chatgpt.site";
 const api = (path, init) => queue.fetch(new Request(origin + path, init), { BUCKET: bucket });
 const tick = async () => (await api("/api/owner-scans/tick", { method: "POST" })).json();
 const ids = Array.from({ length: 450 }, (_, i) => `background-owner-id-${String(i).padStart(4,"0")}`);
+let failNextPoll = false;
 const snapshots = new Map();
 const storage = () => { const values = new Map(); return { getItem: k => values.get(k) || null, setItem: (k,v) => values.set(k,v), removeItem: k => values.delete(k) }; };
 const browser = { location: { hostname: "gnarly-todd.github.io" }, localStorage: storage(), sessionStorage: storage(), setTimeout, clearTimeout, addEventListener() {}, removeEventListener() {} };
@@ -40,7 +41,10 @@ function client() {
   const module = { exports: {} };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync("app/cloud-owner-scans.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
     module, exports: module.exports, window: browser, document: { addEventListener() {}, removeEventListener() {} },
-    crypto: webcrypto, AbortSignal, Date, Map, fetch: (url, init) => api(url.replace(origin, ""), init),
+    crypto: webcrypto, AbortSignal, Date, Map, fetch: (url, init) => {
+      if (failNextPoll && url.includes("cursor=")) { failNextPoll = false; return Promise.reject(new Error("Connection discarded during lock")); }
+      return api(url.replace(origin, ""), init);
+    },
     require: name => name === "./lpu-request" ? { LpuRateLimitError: RateError } : { hydrateOwnerCache: async () => {}, readOwnerCache: id => snapshots.get(id), writeOwnerCache: async snapshot => snapshots.set(snapshot.id, snapshot) },
   });
   return module.exports;
@@ -69,6 +73,8 @@ assert.equal(complete.processed, 450); assert.equal(complete.state, "complete");
 assert.equal(complete.snapshots.length, 25); assert(complete.hasMore);
 const beforeReturn = calls;
 let restored;
+failNextPoll = true;
+browser.setTimeout = (callback, ms) => setTimeout(callback, Math.min(ms, 10));
 await client().loadCloudOwnerSnapshots("selected-profile", candidates, { signal: new AbortController().signal, onProgress: p => restored = p });
 assert.equal(restored.snapshots.length, 450);
 assert.equal(snapshots.size, 450); assert.equal(calls, beforeReturn);
