@@ -52,11 +52,14 @@ function client() {
 const candidates = ids.map(id => ({ id }));
 const controller = new AbortController();
 let firstProgress;
-const scan = client().loadCloudOwnerSnapshots("selected-profile", candidates, { signal: controller.signal, onProgress: p => firstProgress = p }).catch(() => {});
+const initialStates = [];
+const scan = client().loadCloudOwnerSnapshots("selected-profile", candidates, { signal: controller.signal, onProgress: p => { firstProgress = p; initialStates.push(p.backgroundState); } }).catch(() => {});
 for (let i=0; i<100 && !firstProgress; i++) await new Promise(r=>setTimeout(r,1));
 await new Promise(r => setTimeout(r, 20));
 const saved = client().readCloudScan("selected-profile");
 assert(saved, "Background job identity persists before submission");
+assert.equal(initialStates[0], "submitting", "The app does not claim the job is queued before server acknowledgement");
+assert(initialStates.includes("queued"));
 controller.abort(); await scan;
 assert.equal(calls, 0, "The browser does not fetch owner profiles");
 await tick();

@@ -350,23 +350,25 @@ export default function WishlistOwnerTable({
   const ownerCount = (count: number) => (owners.length ? count : busy ? "…" : "—");
   const stateLabel = loading
     ? "Loading your profile…"
-    : busy && backgroundState === "queued"
-      ? "Scan queued on the server — safe to lock your phone"
-      : busy && pauseMessage
-        ? "Cooldown — remaining profiles will load automatically"
-        : busy
-          ? directory
-            ? `Checking ${processed} of ${members.length} profiles…`
-            : "Loading the leaderboard…"
-          : pauseMessage
-            ? "Waiting for the LPU request cooldown"
-            : paused
-              ? "Owner checks paused while you use profile controls"
-              : failed.length
-                ? "Some profiles could not be loaded"
-                : owners.length
-                  ? `${owners.length} owner profiles loaded`
-                  : "Ready when you are — load profiles to find owners";
+    : busy && backgroundState === "submitting"
+      ? "Sending scan to the server…"
+      : busy && backgroundState === "queued"
+        ? "Scan queued on the server — safe to lock your phone"
+        : busy && pauseMessage
+          ? "Cooldown — remaining profiles will load automatically"
+          : busy
+            ? directory
+              ? `Checking ${processed} of ${members.length} profiles…`
+              : "Loading the leaderboard…"
+            : pauseMessage
+              ? "Waiting for the LPU request cooldown"
+              : paused
+                ? "Owner checks paused while you use profile controls"
+                : failed.length
+                  ? "Some profiles could not be loaded"
+                  : owners.length
+                    ? `${owners.length} owner profiles loaded`
+                    : "Ready when you are — load profiles to find owners";
 
   return (
     <section

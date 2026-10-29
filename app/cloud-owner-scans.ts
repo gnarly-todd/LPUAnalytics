@@ -168,7 +168,7 @@ export async function loadCloudOwnerSnapshots(
       ...(progress && progress.retryAt > Date.now()
         ? { rateLimit: new LpuRateLimitError(progress.retryAt) }
         : {}),
-      backgroundState: progress?.state || "queued",
+      backgroundState: progress?.state || "submitting",
     });
   };
   publish();
@@ -209,6 +209,14 @@ export async function loadCloudOwnerSnapshots(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(job),
     signal,
+  });
+  publish({
+    processed: 0,
+    cached: initialCached,
+    fresh: 0,
+    errors: {},
+    retryAt: 0,
+    state: "queued",
   });
   let cursor = 0;
   while (!signal.aborted) {
