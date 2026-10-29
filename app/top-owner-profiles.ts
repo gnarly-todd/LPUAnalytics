@@ -51,22 +51,37 @@ export function selectOwnerCandidates(
   return profiles.filter((profile) => profile.id !== activeProfileId).slice(0, count);
 }
 
+const OWNER_SCOPE_KEY = "lpu-owner-scope-v2";
+let ownerScope = TOP_OWNER_LIMIT;
+
 export function readOwnerScope(profileId: string): number {
   for (const storage of ["localStorage", "sessionStorage"] as const) {
     try {
-      const count = Number(window[storage].getItem(`lpu-owner-scope-v1-${profileId}`));
-      if (Number.isSafeInteger(count) && count >= TOP_OWNER_LIMIT) return count;
+      const saved = window[storage];
+      const keys = [OWNER_SCOPE_KEY, `lpu-owner-scope-v1-${profileId}`];
+      // Migrate expanded ranges saved for any previously selected profile.
+      for (let index = 0; index < saved.length; index++) {
+        const key = saved.key(index);
+        if (key?.startsWith("lpu-owner-scope-v1-")) keys.push(key);
+      }
+      for (const key of keys) {
+        const count = Number(saved.getItem(key));
+        if (Number.isSafeInteger(count) && count >= TOP_OWNER_LIMIT)
+          ownerScope = Math.max(ownerScope, count);
+      }
     } catch {
       /* Try the other cache. */
     }
   }
-  return TOP_OWNER_LIMIT;
+  return ownerScope;
 }
 
 export function writeOwnerScope(profileId: string, count: number) {
+  if (!Number.isSafeInteger(count) || count < TOP_OWNER_LIMIT) return;
+  ownerScope = Math.max(readOwnerScope(profileId), count);
   for (const storage of ["localStorage", "sessionStorage"] as const) {
     try {
-      window[storage].setItem(`lpu-owner-scope-v1-${profileId}`, String(count));
+      window[storage].setItem(OWNER_SCOPE_KEY, String(ownerScope));
     } catch {
       /* Loaded results remain usable when browser storage is unavailable. */
     }

@@ -103,13 +103,20 @@ export default function WishlistOwnerTable({
       let cancelled = false;
       if (cached) {
         setDirectory(cached);
-        const candidates = selectOwnerCandidates(cached.profiles, activeProfile.id, requestedCount);
+        // Restore every valid cached owner, including batches loaded for another
+        // wishlist and a reserve owner used when that profile was excluded.
+        const candidates = cached.profiles.filter((member) => member.id !== activeProfile.id);
         const restore = () => {
           if (cancelled) return;
-          const cachedProfiles = candidates.flatMap((member) => {
+          let count = Math.max(requestedCount, readOwnerScope(activeProfile.id));
+          const cachedProfiles = candidates.flatMap((member, index) => {
             const snapshot = readOwnerCache(member.id);
-            return snapshot ? [snapshotProfile(snapshot)] : [];
+            if (!snapshot) return [];
+            count = Math.max(count, index + 1);
+            return [snapshotProfile(snapshot)];
           });
+          writeOwnerScope(activeProfile.id, count);
+          if (count !== requestedCount) setScope({ profileId: activeProfile.id, count });
           setLoaded(cachedProfiles);
           setProcessed(cachedProfiles.length);
           setCacheCount(cachedProfiles.length);
@@ -336,7 +343,8 @@ export default function WishlistOwnerTable({
           Load top {requestedCount} — cache first reuses profiles saved on this device for up to 7
           days. Fetch more adds the next ranked batch and saves each profile as it arrives. Keep
           going to 1,000 profiles or beyond while LPU allows requests. Fetch latest refreshes your
-          selected range. Opening this screen only reads the cache.
+          selected range. Opening this screen or switching profiles reuses all valid cached owners
+          on this device.
         </p>
         <div className="wishlist-owner-toolbar">
           <div className="wishlist-owner-actions">
