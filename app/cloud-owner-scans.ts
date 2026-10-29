@@ -22,6 +22,7 @@ type CloudStatus = {
   nextCursor: number;
   hasMore: boolean;
   message?: string;
+  receivedAt?: number;
 };
 type SavedScan = { id: string; ids: string[]; force: boolean; count: number; createdAt: number };
 const key = (profileId: string) => `lpu-cloud-scan-v1-${profileId}`;
@@ -149,6 +150,9 @@ export async function loadCloudOwnerSnapshots(
     errors: Record<string, string>;
     retryAt: number;
     state: string;
+    total?: number;
+    updatedAt?: number;
+    receivedAt?: number;
   }) => {
     if (signal.aborted) return;
     onProgress({
@@ -168,7 +172,21 @@ export async function loadCloudOwnerSnapshots(
       ...(progress && progress.retryAt > Date.now()
         ? { rateLimit: new LpuRateLimitError(progress.retryAt) }
         : {}),
-      backgroundState: progress?.state || "submitting",
+      backgroundState: progress?.state || (job || ids.length ? "submitting" : ""),
+      ...(progress && Number.isFinite(progress.updatedAt)
+        ? {
+            serverProgress: {
+              total: progress.total ?? job?.ids.length ?? 0,
+              processed: progress.processed,
+              fresh: progress.fresh,
+              cached: progress.cached,
+              failed: Object.keys(progress.errors).length,
+              updatedAt: progress.updatedAt!,
+              checkedAt: progress.receivedAt ?? Date.now(),
+              retryAt: progress.retryAt,
+            },
+          }
+        : {}),
     });
   };
   publish();
@@ -183,6 +201,7 @@ export async function loadCloudOwnerSnapshots(
     // Save before POST: reopening can retry the same idempotent submission.
     saveScan(profileId, job);
   }
+  let latestStatus: CloudStatus | undefined;
   const reconnectingRequest = async (url: string, init: RequestInit) => {
     for (;;) {
       try {
@@ -198,6 +217,7 @@ export async function loadCloudOwnerSnapshots(
           if (reason.status === 404) clearScan(profileId);
           throw reason;
         }
+        if (latestStatus) publish({ ...latestStatus, state: "reconnecting" });
         // Safari can discard an in-flight request while the phone is locked.
         // Reconnect to the same durable job without starting another scan.
         await waitForUpdate(signal);
@@ -240,7 +260,8 @@ export async function loadCloudOwnerSnapshots(
       await writeOwnerCache(snapshot);
     }
     cursor = status.nextCursor;
-    publish(status);
+    latestStatus = { ...status, receivedAt: Date.now() };
+    publish(latestStatus);
     if (status.hasMore) continue;
     if (["complete", "cancelled"].includes(status.state)) {
       clearScan(profileId);

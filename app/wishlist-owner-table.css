@@ -677,3 +677,29 @@
     margin-top: 14px;
   }
 }
+
+.server-scan-status {
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: var(--surface-soft);
+  min-width: 0;
+}
+.server-scan-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; }
+.server-scan-heading h4 { margin: 0; font-size: 16px; }
+.server-scan-count { margin-top: 16px; font-size: 15px; font-variant-numeric: tabular-nums; }
+.server-scan-status > progress { display: block; width: 100%; height: 12px; margin-top: 12px; accent-color: var(--accent); }
+.server-scan-status p { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
+.server-scan-status strong { color: var(--text); }
+.server-scan-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
+.server-scan-metrics > div { padding: 10px; border: 1px solid var(--line); border-radius: 10px; }
+.server-scan-metrics dt { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.server-scan-metrics dd { margin: 4px 0 0; color: var(--text); font-size: 20px; font-variant-numeric: tabular-nums; }
+.server-scan-times { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 4px; }
+@media (max-width: 380px) { .server-scan-status { padding: 12px; } .server-scan-metrics > div { padding: 8px; } }
+
+.server-scan-status > progress { appearance: none; border: 0; border-radius: 999px; overflow: hidden; background: var(--line); }
+.server-scan-status > progress::-webkit-progress-bar { background: var(--line); }
+.server-scan-status > progress::-webkit-progress-value { background: var(--accent); border-radius: 999px; }
+.server-scan-status > progress::-moz-progress-bar { background: var(--accent); border-radius: 999px; }

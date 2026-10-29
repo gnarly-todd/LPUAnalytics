@@ -9,7 +9,18 @@ export type TopOwner = { id: string; name: string; url: string; ownedCount: numb
 export type TopOwnerDirectory = { profiles: TopOwner[]; updatedAt: string; fetchedAt?: number };
 export type OwnerSnapshot = { id: string; name: string; own: string[]; fetchedAt: number };
 export const OWNER_SCAN_CONCURRENCY = 3;
+export type ServerScanProgress = {
+  total: number;
+  processed: number;
+  fresh: number;
+  cached: number;
+  failed: number;
+  updatedAt: number;
+  checkedAt: number;
+  retryAt: number;
+};
 export type OwnerScanProgress = {
+  serverProgress?: ServerScanProgress;
   backgroundState?: string;
   snapshots: OwnerSnapshot[];
   processed: number;

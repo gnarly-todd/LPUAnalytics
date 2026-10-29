@@ -6,6 +6,7 @@ import {
   loadCloudOwnerSnapshots,
   stopCloudScan,
 } from "./cloud-owner-scans";
+import ServerScanStatus from "./server-scan-progress";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { beltColors, type LockRecord } from "./data";
 import { useCommunityInsights } from "./community-insights";
@@ -27,6 +28,7 @@ import {
   snapshotProfile,
   TOP_OWNER_LIMIT,
   type TopOwnerDirectory,
+  type ServerScanProgress,
 } from "./top-owner-profiles";
 import {
   matchWishlistOwners,
@@ -50,6 +52,8 @@ export default function WishlistOwnerTable({
   const [moreCount, setMoreCount] = useState("50");
   const [moreError, setMoreError] = useState("");
   const [backgroundState, setBackgroundState] = useState("");
+  const [serverProgress, setServerProgress] = useState<ServerScanProgress | undefined>();
+  const [progressClock, setProgressClock] = useState(0);
   const [resumeAt, setResumeAt] = useState(0);
   const [pauseMessage, setPauseMessage] = useState("");
   const forceRefresh = useRef(false);
@@ -61,6 +65,16 @@ export default function WishlistOwnerTable({
   const [loaded, setLoaded] = useState<WishlistProfile[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const retryAt = serverProgress?.retryAt || 0;
+    if (!busy || !retryAt || progressClock >= retryAt) return;
+    if (!progressClock) {
+      setProgressClock(Date.now());
+      return;
+    }
+    const timer = window.setTimeout(() => setProgressClock(Date.now()), 1000);
+    return () => window.clearTimeout(timer);
+  }, [serverProgress?.retryAt, progressClock, busy]);
   const activity = useActivityTimestamps();
   const setScanBusy = (value: boolean) => {
     if (value) activity.start();
@@ -81,6 +95,9 @@ export default function WishlistOwnerTable({
   useEffect(() => {
     setResumeAt(0);
     setPauseMessage("");
+    setBackgroundState("");
+    setServerProgress(undefined);
+    setProgressClock(0);
     setScope({ profileId: activeProfile.id, count: readOwnerScope(activeProfile.id) });
   }, [activeProfile.id]);
   const requestedCount =
@@ -139,6 +156,8 @@ export default function WishlistOwnerTable({
     setResumeAt(0);
     setPauseMessage("");
     setBackgroundState("");
+    setServerProgress(undefined);
+    setProgressClock(0);
     setErrors({});
     setDirectoryError("");
     setProcessed(0);
@@ -165,6 +184,7 @@ export default function WishlistOwnerTable({
             setFreshCount(progress.fresh);
             setErrors(progress.errors);
             setBackgroundState(progress.backgroundState || "");
+            if (progress.serverProgress) setServerProgress(progress.serverProgress);
             setResumeAt(progress.rateLimit?.retryAt || 0);
             setPauseMessage(progress.rateLimit?.message || "");
           },
@@ -505,7 +525,7 @@ export default function WishlistOwnerTable({
                     scanController.current?.abort();
                     setResumeAt(0);
                     setPauseMessage("");
-                    setBackgroundState("");
+                    setBackgroundState(cloudScansAvailable() ? "cancelled" : "");
                     setScanBusy(false);
                   };
                   if (cloudScansAvailable())
@@ -542,9 +562,17 @@ export default function WishlistOwnerTable({
           <span className={`wishlist-state-dot ${busy ? "is-busy" : ""}`} aria-hidden="true" />
           {stateLabel}
         </p>
+        {!!backgroundState && (
+          <ServerScanStatus
+            state={backgroundState}
+            progress={serverProgress}
+            busy={busy}
+            now={progressClock}
+          />
+        )}
         {(busy || cacheCount > 0 || freshCount > 0) && (
           <div className="wishlist-scan-progress">
-            {busy && (
+            {busy && !backgroundState && (
               <progress
                 aria-label="Ranked profiles checked"
                 value={processed}

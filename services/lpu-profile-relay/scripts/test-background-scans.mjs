@@ -80,6 +80,12 @@ failNextPoll = true;
 browser.setTimeout = (callback, ms) => setTimeout(callback, Math.min(ms, 10));
 await client().loadCloudOwnerSnapshots("selected-profile", candidates, { signal: new AbortController().signal, onProgress: p => restored = p });
 assert.equal(restored.snapshots.length, 450);
+assert.equal(restored.serverProgress.total, 450);
+assert.equal(restored.serverProgress.processed, 450);
+assert.equal(restored.serverProgress.fresh, 450);
+assert.equal(restored.serverProgress.failed, 0);
+assert.equal(restored.serverProgress.updatedAt, now);
+assert(restored.serverProgress.checkedAt > 0);
 assert.equal(snapshots.size, 450); assert.equal(calls, beforeReturn);
 assert.equal(client().readCloudScan("selected-profile"), null);
 // Idempotent creates and independent cache-first scans reuse server snapshots.
@@ -106,3 +112,32 @@ assert(await check(await signed()));
 for(const override of [{repository:"other/repo"},{workflow_ref:"gnarly-todd/LPUAnalytics/.github/workflows/pages.yml@refs/heads/main"},{exp:1},{aud:"other"},{ref:"refs/heads/other"}]) assert(!await check(await signed(override)));
 assert(!await check((await signed()).slice(0,-10)+"tampered"));
 console.log("PASS: GitHub OIDC signature verification, workflow/repository/branch/audience pinning, expired and forged runner rejection.");
+
+// Progress UI uses server counts, rather than inferring completion from downloaded pages.
+const React = require("react");
+const { renderToStaticMarkup } = require("react-dom/server");
+const progressModule = { exports: {} };
+vm.runInNewContext(ts.transpileModule(fs.readFileSync("app/server-scan-progress.tsx", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText, {
+  module: progressModule, exports: progressModule.exports,
+  require: name => name === "./activity-status" ? { DataTimestamp: ({value}) => React.createElement("time", null, String(value)) } : require(name),
+});
+const Panel = progressModule.exports.default;
+const progress = { total: 450, processed: 125, fresh: 100, cached: 20, failed: 5, updatedAt: 1000, checkedAt: 2000, retryAt: 67000 };
+const renderPanel = (state, data=progress, busy=true, clock=2000) => renderToStaticMarkup(React.createElement(Panel, {state, progress:data, busy, now:clock}));
+const runningHtml = renderPanel("running");
+assert(runningHtml.includes("125 of 450 profiles checked"));
+assert(runningHtml.includes("27%"));
+assert(runningHtml.includes("325 remaining"));
+assert(runningHtml.includes("Server cache"));
+assert(runningHtml.includes("Last server update"));
+assert(runningHtml.includes("Last status received"));
+assert(renderPanel("cooldown").includes("1m 05s"));
+assert(renderPanel("cooldown",progress,true,68000).includes("Cooldown ended"));
+assert(renderPanel("reconnecting").includes("Showing the last received progress"));
+assert(renderPanel("complete",{...progress,processed:450},false).includes("Complete with failures"));
+assert(renderPanel("cancelled",progress,false).includes("Stopped"));
+const sending = renderToStaticMarkup(React.createElement(Panel, {state:"submitting",busy:true}));
+assert(sending.includes("Wait for server confirmation"));
+assert(!sending.includes("You can lock your phone"));
+assert(!sending.includes("0 of 0"));
+console.log("PASS: exact server progress counts, percentage, remaining, failure totals, timestamps, live cooldown formatting, reconnecting, complete and stopped states.");
