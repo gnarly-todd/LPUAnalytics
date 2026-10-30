@@ -77,6 +77,14 @@ export default function ServerScanStatus({
               Automatic resume after <DataTimestamp value={progress.retryAt} />.
             </p>
           )}
+          {busy &&
+            (!progress.runnerLastSeenAt ||
+              progress.checkedAt - progress.runnerLastSeenAt > 5 * 60_000) && (
+              <p>
+                Waiting for the background runner to check in. This page can advance batches while
+                open; scheduled runner starts may be delayed.
+              </p>
+            )}
           <div className="server-scan-times">
             <p>
               Last server update: <DataTimestamp value={progress.updatedAt} />
@@ -84,6 +92,11 @@ export default function ServerScanStatus({
             <p>
               Last status received: <DataTimestamp value={progress.checkedAt} />
             </p>
+            {!!progress.runnerLastSeenAt && (
+              <p>
+                Background runner check-in: <DataTimestamp value={progress.runnerLastSeenAt} />
+              </p>
+            )}
           </div>
         </>
       ) : (
@@ -99,7 +112,7 @@ export default function ServerScanStatus({
         <p>
           {state === "reconnecting"
             ? "Connection interrupted. Showing the last received progress; the server scan continues. "
-            : "Results arrive in batches. The server checks queued work about every five minutes. "}
+            : "Results arrive in batches. This page checks progress about every 15 seconds. "}
           You can lock your phone and return later.
         </p>
       )}

@@ -4,7 +4,7 @@ const WINDOW_MS = 20 * 60 * 1000;
 const CACHE_MS = 30_000;
 const PUBLIC_COLLECTIONS = ["own", "wishlist", "picked", "recorded", "recordedLocks", "scorecard", "safelocksOwn", "safelocksCracked", "safelocksWishlist"];
 
-export function createRelay({ fetchUpstream = fetch, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {}) {
+export function createRelay({ fetchUpstream = fetch, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), requestTimeout = 20_000, maxAttempts = 2 } = {}) {
   const cache = new Map();
   const pending = new Map();
   let cooldownUntil = 0;
@@ -20,21 +20,21 @@ export function createRelay({ fetchUpstream = fetch, now = Date.now, sleep = (ms
     if (cooldownUntil > now()) return { status: 429, body: { message: "LPU requests are temporarily limited. Saved results remain available.", retryAt: cooldownUntil } };
     if (pending.has(id)) return pending.get(id);
     const work = (async () => {
-      for (let attempt = 0; attempt < 2; attempt++) {
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
         if (cooldownUntil > now()) return { status: 429, body: { message: "LPU requests are temporarily limited.", retryAt: cooldownUntil } };
         let response;
         try {
-          response = await fetchUpstream(UPSTREAM + encodeURIComponent(id), { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(20_000), redirect: "manual" });
+          response = await fetchUpstream(UPSTREAM + encodeURIComponent(id), { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(requestTimeout), redirect: "manual" });
         } catch (error) {
           console.warn("Public LPU relay upstream request failed:", error instanceof Error ? error.message : "Network error");
-          if (!attempt) { await sleep(1000); continue; }
+          if (attempt + 1 < maxAttempts) { await sleep(1000); continue; }
           return { status: 502, body: { message: "The LPU profile service could not be reached. Your saved data remains available." } };
         }
         if (response.status === 429) {
           cooldownUntil = Math.max(cooldownUntil, retryAt(response.headers));
           return { status: 429, body: { message: "LPU requests are temporarily limited. Your saved data remains available.", retryAt: cooldownUntil } };
         }
-        if ([500, 502, 503, 504].includes(response.status) && !attempt) { await response.body?.cancel(); await sleep(1000); continue; }
+        if ([500, 502, 503, 504].includes(response.status) && attempt + 1 < maxAttempts) { await response.body?.cancel(); await sleep(1000); continue; }
         if (!response.ok) return { status: response.status === 404 ? 404 : 502, body: { message: response.status === 404 ? "That public LPU profile could not be found." : "LPU could not return that profile. Your saved data remains available." } };
         let upstream;
         try { upstream = await response.json(); } catch { return { status: 502, body: { message: "LPU returned an unreadable profile response." } }; }
@@ -114,11 +114,11 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = verif
   const read = async (bucket, key) => { const object = await bucket.get(key); return object ? object.json() : null; };
   const put = (bucket, key, value, options = {}) => bucket.put(key, JSON.stringify(value), { httpMetadata: { contentType: "application/json" }, ...options });
   const isFresh = snapshot => snapshot && Number.isFinite(snapshot.fetchedAt) && snapshot.fetchedAt <= now() && snapshot.fetchedAt > now() - SCAN_TTL;
-  async function tick(bucket) {
+  async function tick(bucket, { jobId, maxProfiles = 50 } = {}) {
     const lock = await bucket.get("state/scan-lease");
-    if (lock && (await lock.json()).until > now()) return { status: "already-running" };
+    if (lock && (await lock.json()).until > now()) return { status: "already-running", pending: 1 };
     const lease = await put(bucket, "state/scan-lease", { until: now() + 120_000 }, { onlyIf: lock ? { etagMatches: lock.etag } : { etagDoesNotMatch: "*" } });
-    if (!lease) return { status: "already-running" };
+    if (!lease) return { status: "already-running", pending: 1 };
     try {
       const housekeeping = await read(bucket, "state/scan-cleanup");
       if (!housekeeping || housekeeping.nextAt <= now()) {
@@ -130,9 +130,12 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = verif
         }
         await put(bucket, "state/scan-cleanup", { nextAt: now() + 3600_000, cursors });
       }
+      const list = jobId
+        ? { objects: await bucket.head(`pending/${jobId}`) ? [{ key: `pending/${jobId}`, uploaded: new Date(now()) }] : [] }
+        : await bucket.list({ prefix: "pending/", limit: 1000 });
+      if (!list.objects.length) return { status: "idle", processed: 0, pending: 0 };
       const cooldown = await read(bucket, "state/scan-cooldown");
-      if (cooldown?.retryAt > now()) return { status: "cooldown", retryAt: cooldown.retryAt };
-      const list = await bucket.list({ prefix: "pending/", limit: 1000 });
+      if (cooldown?.retryAt > now()) return { status: "cooldown", pending: list.objects.length, retryAt: cooldown.retryAt };
       const deadline = now() + 25_000;
       let processed = 0;
       for (const entry of list.objects.sort((a, b) => new Date(a.uploaded).getTime() - new Date(b.uploaded).getTime())) {
@@ -147,10 +150,10 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = verif
         const pending = job.ids.filter(id => !done.has(id) && !job.errors[id]);
         job.state = "running";
         job.retryAt = 0;
-        while (pending.length && processed < 50 && now() < deadline) {
+        while (pending.length && processed < maxProfiles && now() < deadline) {
           if (await bucket.head(`cancelled/${id}`)) { job.state = "cancelled"; break; }
           let rateAt = 0;
-          const batch = pending.splice(0, Math.min(3, 50 - processed));
+          const batch = pending.splice(0, Math.min(3, maxProfiles - processed));
           await Promise.all(batch.map(async ownerId => {
             const saved = await read(bucket, `owners/${ownerId}`);
             if (!job.force && isFresh(saved)) { done.add(ownerId); job.cached++; return; }
@@ -185,15 +188,18 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = verif
         job.updatedAt = now();
         await put(bucket, `jobs/${id}`, job);
         if (["complete", "cancelled"].includes(job.state)) await bucket.delete(entry.key);
-        if (job.retryAt > now() || processed >= 50 || now() >= deadline) break;
+        else await put(bucket, entry.key, { createdAt: job.createdAt });
+        if (job.retryAt > now() || processed >= maxProfiles || now() >= deadline) break;
       }
-      return { status: "checked", processed };
+      const remaining = await bucket.list({ prefix: "pending/", limit: 1000 });
+      const remainingCooldown = await read(bucket, "state/scan-cooldown");
+      return { status: "checked", processed, pending: remaining.objects.length, retryAt: remainingCooldown?.retryAt > now() ? remainingCooldown.retryAt : 0 };
     } finally {
       await put(bucket, "state/scan-lease", { until: 0 }, { onlyIf: { etagMatches: lease.etag } });
     }
   }
   return {
-    async fetch(request, env) {
+    async fetch(request, env, ctx) {
       const url = new URL(request.url);
       const origin = request.headers.get("origin");
       const allowed = !origin || ["https://gnarly-todd.github.io", "https://todd-lock-analytics.nicelife70117.chatgpt.site", "http://terminal.local:4173", SCAN_ORIGIN].includes(origin);
@@ -205,6 +211,7 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = verif
       const bucket = env.BUCKET;
       if (url.pathname === "/api/owner-scans/tick") {
         if (request.method !== "POST" || !await authorize(request)) return reply({ message: "Runner authorization required." }, 403);
+        await put(bucket, "state/scan-runner", { checkedAt: now() });
         return reply(await tick(bucket));
       }
       if (url.pathname === "/api/owner-scans" && request.method === "POST") {
@@ -219,6 +226,8 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = verif
         await put(bucket, `jobs/${body.id}`, job);
         // The runner reads pending entries independently of browser sessions.
         await put(bucket, `pending/${body.id}`, { createdAt: job.createdAt });
+        // The first bounded batch starts on submission, independent of cron.
+        ctx?.waitUntil(tick(bucket, { jobId: body.id, maxProfiles: 3 }).catch(error => console.error("Initial scan batch failed", error.message)));
         return reply({ id: body.id, state: "queued" }, 202);
       }
       const match = url.pathname.match(/^\/api\/owner-scans\/([a-f0-9-]{36})$/);
@@ -226,6 +235,11 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = verif
       const id = match[1];
       const job = await read(bucket, `jobs/${id}`);
       if (!job || job.createdAt < now() - SCAN_TTL) return reply({ message: "This background scan has expired." }, 404);
+      if (url.searchParams.get("action") === "advance" && request.method === "POST") {
+        if (!ctx?.waitUntil) return reply({ message: "Background execution is unavailable." }, 503);
+        ctx.waitUntil(tick(bucket, { jobId: id, maxProfiles: 3 }).catch(error => console.error("Scan batch failed", error.message)));
+        return reply({ id, state: "accepted" }, 202);
+      }
       if (request.method === "DELETE") {
         await put(bucket, `cancelled/${id}`, { cancelledAt: now() });
         await bucket.delete(`pending/${id}`);
@@ -237,17 +251,21 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = verif
       const page = job.done.slice(cursor, cursor + 25);
       const snapshots = (await Promise.all(page.map(ownerId => read(bucket, `owners/${ownerId}`)))).filter(Boolean);
       const cancelled = await bucket.head(`cancelled/${id}`);
-      return reply({ id, state: cancelled ? "cancelled" : job.state, total: job.ids.length, processed: job.done.length + Object.keys(job.errors).length, fresh: job.fresh, cached: job.cached, errors: job.errors, retryAt: job.retryAt, updatedAt: job.updatedAt, snapshots, nextCursor: cursor + page.length, hasMore: cursor + page.length < job.done.length });
+      const cooldown = await read(bucket, "state/scan-cooldown");
+      const runner = await read(bucket, "state/scan-runner");
+      return reply({ runnerLastSeenAt: runner?.checkedAt || 0, id, state: cancelled ? "cancelled" : (cooldown?.retryAt > now() && !["complete", "cancelled"].includes(job.state) ? "cooldown" : job.state), total: job.ids.length, processed: job.done.length + Object.keys(job.errors).length, fresh: job.fresh, cached: job.cached, errors: job.errors, retryAt: Math.max(job.retryAt || 0, cooldown?.retryAt || 0), updatedAt: job.updatedAt, snapshots, nextCursor: cursor + page.length, hasMore: cursor + page.length < job.done.length });
     },
   };
 }
 
 const publicRelay = createRelay();
-const scanQueue = createScanQueue({ readProfile: publicRelay.readProfile });
+// Short, single-attempt reads keep browser-triggered batches below waitUntil's limit.
+const scanRelay = createRelay({ requestTimeout: 10_000, maxAttempts: 1 });
+const scanQueue = createScanQueue({ readProfile: scanRelay.readProfile });
 export default {
-  fetch(request, env) {
+  fetch(request, env, ctx) {
     return new URL(request.url).pathname.startsWith("/api/owner-scans")
-      ? scanQueue.fetch(request, env)
+      ? scanQueue.fetch(request, env, ctx)
       : publicRelay.fetch(request);
   },
 };

@@ -141,3 +141,29 @@ assert(sending.includes("Wait for server confirmation"));
 assert(!sending.includes("You can lock your phone"));
 assert(!sending.includes("0 of 0"));
 console.log("PASS: exact server progress counts, percentage, remaining, failure totals, timestamps, live cooldown formatting, reconnecting, complete and stopped states.");
+
+// A single runner must keep processing after the first 50 and through cooldowns.
+const { drainScans } = await import("../../../scripts/run-owner-scans.mjs");
+let runnerNow = 0, runnerChecks = 0;
+const results = [
+  { status: "checked", processed: 50, pending: 1 },
+  { status: "cooldown", pending: 1, retryAt: 120000 },
+  { status: "cooldown", pending: 1, retryAt: 120000 },
+  { status: "checked", processed: 50, pending: 1 },
+  { status: "checked", processed: 50, pending: 0 },
+];
+const moreWork = await drainScans({ check: async () => { runnerChecks++; return results.shift(); }, wait: async ms => { runnerNow += ms; }, now: () => runnerNow });
+assert.equal(moreWork, false);
+assert.equal(runnerChecks, 5, "A runner does not exit after one batch or a cooldown");
+assert(runnerNow >= 120000, "Cooldown is not bypassed");
+const handoff = await drainScans({ check: async () => ({ status: "checked", pending: 1 }), wait: async ms => { runnerNow += ms; }, now: () => runnerNow, durationMs: 30000 });
+assert(handoff, "Pending work requests a handoff before the runner deadline");
+const batchId = randomUUID();
+const backgroundWork = [];
+const beforeBatch = calls;
+await queue.fetch(new Request(origin+"/api/owner-scans", { method:"POST", body:JSON.stringify({id:batchId,ids:ids.slice(0,10),force:true}) }), {BUCKET:bucket}, { waitUntil: p => backgroundWork.push(p) });
+assert.equal(backgroundWork.length, 1, "Submission starts a batch without waiting for cron");
+await Promise.all(backgroundWork);
+assert.equal(calls-beforeBatch, 3, "Submission batch is bounded to three requests");
+await api(`/api/owner-scans/${batchId}`, { method:"DELETE" });
+console.log("PASS: runner drains multiple batches, waits through cooldowns, hands off long jobs, and starts a bounded batch on submission.");

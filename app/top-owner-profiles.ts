@@ -17,6 +17,7 @@ export type ServerScanProgress = {
   failed: number;
   updatedAt: number;
   checkedAt: number;
+  runnerLastSeenAt?: number;
   retryAt: number;
 };
 export type OwnerScanProgress = {

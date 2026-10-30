@@ -23,6 +23,7 @@ type CloudStatus = {
   hasMore: boolean;
   message?: string;
   receivedAt?: number;
+  runnerLastSeenAt?: number;
 };
 type SavedScan = { id: string; ids: string[]; force: boolean; count: number; createdAt: number };
 const key = (profileId: string) => `lpu-cloud-scan-v1-${profileId}`;
@@ -153,6 +154,7 @@ export async function loadCloudOwnerSnapshots(
     total?: number;
     updatedAt?: number;
     receivedAt?: number;
+    runnerLastSeenAt?: number;
   }) => {
     if (signal.aborted) return;
     onProgress({
@@ -183,6 +185,7 @@ export async function loadCloudOwnerSnapshots(
               failed: Object.keys(progress.errors).length,
               updatedAt: progress.updatedAt!,
               checkedAt: progress.receivedAt ?? Date.now(),
+              runnerLastSeenAt: progress.runnerLastSeenAt || 0,
               retryAt: progress.retryAt,
             },
           }
@@ -240,6 +243,15 @@ export async function loadCloudOwnerSnapshots(
   });
   let cursor = 0;
   while (!signal.aborted) {
+    // Nudge a bounded server batch immediately while the page is available.
+    // The durable runner continues the rest when the browser is suspended.
+    if (!latestStatus?.retryAt || latestStatus.retryAt <= Date.now()) {
+      await request(`${ENDPOINT}/${job.id}?action=advance`, { method: "POST", signal }).catch(
+        (reason) => {
+          if (signal.aborted) throw reason;
+        },
+      );
+    }
     const status = await reconnectingRequest(`${ENDPOINT}/${job.id}?cursor=${cursor}`, { signal });
     if (
       !Array.isArray(status.snapshots) ||

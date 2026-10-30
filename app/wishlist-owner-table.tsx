@@ -480,8 +480,9 @@ export default function WishlistOwnerTable({
           arrives. Rate limits pause the scan; it resumes automatically after each cooldown, even
           with Safari minimized or your phone locked. Keep going to 1,000 profiles or beyond while
           LPU allows requests. Fetch latest refreshes your selected range. Opening this screen or
-          switching profiles reuses all valid cached owners on this device. The server checks queued
-          scans about every five minutes; starts and cooldown resumes can take a little longer.
+          switching profiles reuses all valid cached owners on this device. New scans start with a
+          server batch immediately. The background runner stays active through cooldowns; scheduled
+          starts can be delayed.
         </p>
         <div className="wishlist-owner-toolbar">
           <div className="wishlist-owner-actions">
