@@ -137,7 +137,7 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = verif
       const cooldown = await read(bucket, "state/scan-cooldown");
       if (cooldown?.retryAt > now()) return { status: "cooldown", pending: list.objects.length, retryAt: cooldown.retryAt };
       const deadline = now() + 25_000;
-      let processed = 0;
+      let processed = 0, fetched = 0, cacheHits = 0;
       for (const entry of list.objects.sort((a, b) => new Date(a.uploaded).getTime() - new Date(b.uploaded).getTime())) {
         const id = entry.key.slice(8);
         const job = await read(bucket, `jobs/${id}`);
@@ -156,7 +156,7 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = verif
           const batch = pending.splice(0, Math.min(3, maxProfiles - processed));
           await Promise.all(batch.map(async ownerId => {
             const saved = await read(bucket, `owners/${ownerId}`);
-            if (!job.force && isFresh(saved)) { done.add(ownerId); job.cached++; return; }
+            if (!job.force && isFresh(saved)) { done.add(ownerId); job.cached++; cacheHits++; return; }
             let result;
             try { result = await readProfile(ownerId); } catch { result = { status: 502 }; }
             if (result.status === 429) { rateAt = Math.max(rateAt, result.body?.retryAt || now() + WINDOW_MS); return; }
@@ -171,6 +171,7 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = verif
             await put(bucket, `owners/${ownerId}`, snapshot);
             done.add(ownerId);
             job.fresh++;
+            fetched++;
           }));
           processed += batch.length;
           job.done = [...done];
@@ -193,7 +194,7 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = verif
       }
       const remaining = await bucket.list({ prefix: "pending/", limit: 1000 });
       const remainingCooldown = await read(bucket, "state/scan-cooldown");
-      return { status: "checked", processed, pending: remaining.objects.length, retryAt: remainingCooldown?.retryAt > now() ? remainingCooldown.retryAt : 0 };
+      return { status: "checked", processed, fetched, cacheHits, pending: remaining.objects.length, retryAt: remainingCooldown?.retryAt > now() ? remainingCooldown.retryAt : 0 };
     } finally {
       await put(bucket, "state/scan-lease", { until: 0 }, { onlyIf: { etagMatches: lease.etag } });
     }
@@ -209,10 +210,20 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = verif
       if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...headers, "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization", "Access-Control-Max-Age": "86400" } });
       if (!env?.BUCKET) return reply({ message: "Background scan storage is not available." }, 503);
       const bucket = env.BUCKET;
+      if (url.pathname === "/api/owner-scans/health" && request.method === "GET") {
+        const runner = await read(bucket, "state/scan-runner");
+        const lastBatch = await read(bucket, "state/scan-last-result");
+        const cooldown = await read(bucket, "state/scan-cooldown");
+        const pending = await bucket.list({ prefix: "pending/", limit: 1000 });
+        return reply({ serverTime: now(), runnerLastSeenAt: runner?.checkedAt || 0, pending: pending.objects.length, retryAt: cooldown?.retryAt || 0, lastBatch });
+      }
       if (url.pathname === "/api/owner-scans/tick") {
         if (request.method !== "POST" || !await authorize(request)) return reply({ message: "Runner authorization required." }, 403);
         await put(bucket, "state/scan-runner", { checkedAt: now() });
-        return reply(await tick(bucket));
+        const result = await tick(bucket);
+        const previous = await read(bucket, "state/scan-last-result");
+        await put(bucket, "state/scan-last-result", { ...result, finishedAt: now(), totalFetched: (previous?.totalFetched || 0) + (result.fetched || 0) });
+        return reply(result);
       }
       if (url.pathname === "/api/owner-scans" && request.method === "POST") {
         if (Number(request.headers.get("content-length")) > 2_000_000) return reply({ message: "Scan request is too large." }, 413);
