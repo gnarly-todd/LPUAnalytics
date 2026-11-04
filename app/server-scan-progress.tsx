@@ -74,7 +74,7 @@ export default function ServerScanStatus({
               ) : now ? (
                 <>Cooldown ended. Waiting for the next server check. </>
               ) : null}
-              Automatic resume after <DataTimestamp value={progress.retryAt} />.
+              The runner can resume after <DataTimestamp value={progress.retryAt} />.
             </p>
           )}
           {busy &&
@@ -111,9 +111,9 @@ export default function ServerScanStatus({
       {busy && state !== "submitting" && (
         <p>
           {state === "reconnecting"
-            ? "Connection interrupted. Showing the last received progress; the server scan continues. "
+            ? "Connection interrupted. Showing the last received progress; your scan remains queued on the server. "
             : "Results arrive in batches. This page checks progress about every 15 seconds. "}
-          You can lock your phone and return later.
+          You can return later; scheduled runner starts may be delayed.
         </p>
       )}
     </section>

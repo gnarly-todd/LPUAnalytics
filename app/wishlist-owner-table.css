@@ -177,6 +177,64 @@
 .wishlist-results-heading {
   margin-bottom: 18px;
 }
+.wishlist-top-matches {
+  margin: 0 0 28px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.wishlist-top-matches h3 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.4;
+}
+.wishlist-top-matches p {
+  margin: 6px 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.wishlist-top-matches > ol {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 1.5em;
+}
+.wishlist-top-matches > ol > li {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+.wishlist-top-matches > ol > li > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.wishlist-top-matches a {
+  color: var(--wishlist-link);
+  font-weight: 650;
+}
+.wishlist-top-matches strong {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.wishlist-top-matches details {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.wishlist-top-matches summary {
+  cursor: pointer;
+  padding-top: 5px;
+}
+.wishlist-top-matches details ul {
+  margin: 8px 0 0;
+  padding-left: 1.3em;
+}
 .wishlist-results-heading > p {
   margin-top: 6px;
   max-width: 800px;

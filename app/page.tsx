@@ -1449,11 +1449,11 @@ function HomeContent() {
     () => new Map(communityData.catalog.map((entry) => [entry.id, entry])),
     [communityData],
   );
-  const lpuCatalog = {
-    all: communityData.catalog.length,
-    ranked: communityData.catalog.filter((entry) => entry.belt !== "Unranked").length,
-    unranked: communityData.catalog.filter((entry) => entry.belt === "Unranked").length,
-  };
+  const lpuCatalog = useMemo(() => {
+    const all = communityData.catalog.length;
+    const ranked = communityData.catalog.filter((entry) => entry.belt !== "Unranked").length;
+    return { all, ranked, unranked: all - ranked };
+  }, [communityData.catalog]);
   const LPU_STATS_SNAPSHOT = formatInsightDate(
     communityData.statsUpdatedAt || communityData.fetchedAt,
   );

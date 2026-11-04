@@ -9,6 +9,8 @@ export type WishlistProfile = {
 };
 
 export function matchWishlistOwners(active: WishlistProfile, candidates: WishlistProfile[]) {
+  const wishlist = active.locks.filter((lock) => lock.status === "Wishlist");
+  if (!wishlist.length) return [];
   const profiles = [
     ...new Map(
       candidates
@@ -21,21 +23,46 @@ export function matchWishlistOwners(active: WishlistProfile, candidates: Wishlis
         .map((p) => [p.id, p]),
     ).values(),
   ];
-  const owned = new Map(
-    profiles.map((p) => [
-      p.id,
-      new Set(p.locks.filter((l) => l.status === "Owned").map((l) => l.id)),
-    ]),
-  );
-  return active.locks
-    .filter((l) => l.status === "Wishlist")
-    .map((lock) => ({
-      lock,
-      owners: profiles
-        .filter((p) => owned.get(p.id)?.has(lock.id))
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    }))
+  // Index the wishlist once and visit each owned lock once. Sorting profiles
+  // before indexing preserves the alphabetical owner order in every result.
+  const ownersByLock = new Map(wishlist.map((lock) => [lock.id, [] as WishlistProfile[]]));
+  profiles.sort((a, b) => a.name.localeCompare(b.name));
+  for (const profile of profiles) {
+    const seen = new Set<string>();
+    for (const lock of profile.locks) {
+      if (lock.status !== "Owned" || seen.has(lock.id)) continue;
+      const owners = ownersByLock.get(lock.id);
+      if (owners) {
+        owners.push(profile);
+        seen.add(lock.id);
+      }
+    }
+  }
+  return wishlist
+    .map((lock) => ({ lock, owners: ownersByLock.get(lock.id)! }))
     .sort((a, b) => a.lock.name.localeCompare(b.lock.name));
+}
+
+export function rankWishlistOwnerMatches(rows: ReturnType<typeof matchWishlistOwners>) {
+  const byOwner = new Map<string, { profile: WishlistProfile; locks: Map<string, LockRecord> }>();
+  for (const { lock, owners } of rows) {
+    for (const profile of owners) {
+      let match = byOwner.get(profile.id);
+      if (!match) {
+        match = { profile, locks: new Map() };
+        byOwner.set(profile.id, match);
+      }
+      match.locks.set(lock.id, lock);
+    }
+  }
+  return [...byOwner.values()]
+    .map(({ profile, locks }) => ({ profile, locks: [...locks.values()] }))
+    .sort(
+      (a, b) =>
+        b.locks.length - a.locks.length ||
+        a.profile.name.localeCompare(b.profile.name) ||
+        a.profile.id.localeCompare(b.profile.id),
+    );
 }
 
 export type WishlistSort = {

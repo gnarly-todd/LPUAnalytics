@@ -62,7 +62,7 @@ Every push starts `.github/workflows/pages.yml` and republishes the Pages site. 
 
 ## 5. Daily lock-data refresh
 
-`.github/workflows/refresh-profile.yml` checks Todd’s public LPU profile every day at 8:00 AM in `America/New_York`. It runs at the correct local hour through Eastern daylight-saving changes.
+`.github/workflows/refresh-profile.yml` schedules a check of Todd’s public LPU profile for 8:00 AM in `America/New_York`, including Eastern daylight-saving changes. GitHub may start scheduled jobs late or skip them. A late start still runs the refresh instead of being discarded solely because it is no longer 8:00 AM.
 
 The workflow reads the public LPU profile and catalog, regenerates `app/data.ts`, validates the static build, and commits only when the profile changed. The refresh workflow deploys its validated artifact directly; commits made with `GITHUB_TOKEN` do not start another push workflow. Both deployment workflows reject stale build artifacts.
 

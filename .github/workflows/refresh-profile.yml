@@ -2,8 +2,9 @@ name: Refresh LPU profile data
 
 on:
   schedule:
-    # GitHub schedules use UTC. Run at both possible UTC hours, then keep only 8 AM New York time.
-    - cron: "0 12,13 * * *"
+    # Distinct events let the gate identify the intended UTC hour even when GitHub starts late.
+    - cron: "0 12 * * *"
+    - cron: "0 13 * * *"
   workflow_dispatch:
 
 permissions:
@@ -22,17 +23,15 @@ jobs:
     outputs:
       should_run: ${{ steps.time.outputs.should_run }}
     steps:
-      - name: Continue at 8 AM New York time or for a manual refresh
+      - uses: actions/checkout@v4
+      - name: Select the 8 AM New York schedule or a manual refresh
         id: time
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
         run: |
-          if [[ "$EVENT_NAME" != "schedule" || "$(TZ=America/New_York date +%H)" == "08" ]]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-          fi
+          node scripts/refresh-schedule.mjs >> "$GITHUB_OUTPUT"
 
   refresh:
     name: Refresh, validate, and package

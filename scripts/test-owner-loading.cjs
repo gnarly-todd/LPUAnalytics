@@ -472,6 +472,15 @@ async function componentChecks() {
   assert.equal(env.directoryCalls, 1);
   html = renderToStaticMarkup(tree);
   assert(html.includes("Owner 049"), "All fifty matched owner names must be rendered");
+  const topMatches = nodes(tree).find((node) => node.props?.className === "wishlist-top-matches");
+  const topMatchesHtml = renderToStaticMarkup(topMatches);
+  assert(topMatchesHtml.includes("Owners with the most wishlist matches"));
+  assert(topMatchesHtml.includes("65 matches") && topMatchesHtml.includes("View matching locks"));
+  assert.equal(
+    (topMatchesHtml.match(/<details>/g) ?? []).length,
+    5,
+    "Show the five strongest loaded overlaps",
+  );
   const unmatchedMessage = nodes(tree).find(
     (node) => node.props?.className === "wishlist-unmatched-message",
   );
@@ -830,9 +839,10 @@ async function componentChecks() {
     "Forced refresh resumes only owners not yet refreshed",
   );
   // Stop cancels a pending timer and prevents automatic restart.
-  env.fetch = async (...args) => args[0].includes("/api/v1/")
-    ? new Response("", { status: 429, headers: { "Retry-After": "0" } })
-    : originalFetch(...args);
+  env.fetch = async (...args) =>
+    args[0].includes("/api/v1/")
+      ? new Response("", { status: 429, headers: { "Retry-After": "0" } })
+      : originalFetch(...args);
   button("Fetch latest from LPU Belts").props.onClick();
   render();
   for (let i = 0; i < 100 && !cooldownTimers.size; i++) {

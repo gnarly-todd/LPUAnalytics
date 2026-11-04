@@ -104,6 +104,7 @@ const url = `https://test.chatgpt.site/api/lpu-profile?url=${encodeURIComponent(
     },
   );
   await browser("app/lpu-request.ts").fetchLpuUser(id);
+  assert.equal(storage.size, 0, "Successful profile reads do not write an unused request history");
   assert.deepEqual(
     browserCalls,
     [`/api/lpu-user?userId=${id}`],

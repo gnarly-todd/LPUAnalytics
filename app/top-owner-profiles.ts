@@ -308,7 +308,7 @@ export function writeOwnerCache(snapshot: OwnerSnapshot): Promise<void> {
 export async function fetchOwnerSnapshot(id: string, signal?: AbortSignal): Promise<OwnerSnapshot> {
   // Only the approved public LPU user API is used. Never fall back to Firestore
   // or try another source after an access restriction.
-  const response = await fetchLpuUser(id, signal, true);
+  const response = await fetchLpuUser(id, signal);
   if (!response.ok) throw new Error(`LPU profile could not be loaded (${response.status}).`);
   return parseOwnerSnapshot(
     await response.json(),

@@ -2,25 +2,18 @@
 // Honor the provider’s cooldown across tabs and both profile and owner requests.
 const STATE_KEY = "lpu-request-budget-v1";
 const WINDOW_MS = 20 * 60 * 1000;
-type Budget = { retryAt: number; attempts: number[] };
-let memory: Budget = { retryAt: 0, attempts: [] };
+type Budget = { retryAt: number };
+let memory: Budget = { retryAt: 0 };
 
 function readBudget(): Budget {
   try {
     if (typeof window !== "undefined") {
       const stored = JSON.parse(window.localStorage.getItem(STATE_KEY) || "null");
-      if (stored && Array.isArray(stored.attempts))
-        memory = {
-          retryAt: Number.isFinite(stored.retryAt) ? stored.retryAt : 0,
-          attempts: stored.attempts,
-        };
+      if (stored && Number.isFinite(stored.retryAt)) memory = { retryAt: stored.retryAt };
     }
   } catch {
     /* In-memory protection still works when storage is unavailable. */
   }
-  memory.attempts = memory.attempts.filter(
-    (time) => Number.isFinite(time) && time > Date.now() - WINDOW_MS,
-  );
   return memory;
 }
 
@@ -35,12 +28,9 @@ function saveBudget(budget: Budget) {
 }
 
 export class LpuRateLimitError extends Error {
-  constructor(
-    public retryAt: number,
-    public backgroundOnly = false,
-  ) {
+  constructor(public retryAt: number) {
     super(
-      `${backgroundOnly ? "Background owner checks are paused to keep profile loading available." : "LPU has temporarily limited profile requests."} Requests can resume after ${new Date(retryAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}. Saved data remains available.`,
+      `LPU has temporarily limited profile requests. Requests can resume after ${new Date(retryAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}. Saved data remains available.`,
     );
     this.name = "LpuRateLimitError";
   }
@@ -59,16 +49,12 @@ export function recordLpuCooldown(retryAt: number) {
   saveBudget(budget);
 }
 
-export function checkLpuBudget(background = false) {
+export function checkLpuBudget() {
   const budget = readBudget();
   if (budget.retryAt > Date.now()) throw new LpuRateLimitError(budget.retryAt);
 }
 
-export async function fetchLpuUser(
-  id: string,
-  signal?: AbortSignal,
-  background = false,
-): Promise<Response> {
+export async function fetchLpuUser(id: string, signal?: AbortSignal): Promise<Response> {
   const githubPages =
     typeof window !== "undefined" && window.location?.hostname.endsWith("github.io");
   const proxied =
@@ -85,10 +71,7 @@ export async function fetchLpuUser(
   const attempts = proxied || githubPages ? 1 : 2; // Both relays already retry upstream failures.
   for (let attempt = 0; attempt < attempts; attempt++) {
     signal?.throwIfAborted();
-    checkLpuBudget(background);
-    const budget = readBudget();
-    budget.attempts.push(Date.now());
-    saveBudget(budget);
+    checkLpuBudget();
     let response: Response;
     try {
       response = await fetch(requestUrl, {

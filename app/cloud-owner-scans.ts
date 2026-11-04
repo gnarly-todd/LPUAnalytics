@@ -204,6 +204,7 @@ export async function loadCloudOwnerSnapshots(
     // Save before POST: reopening can retry the same idempotent submission.
     saveScan(profileId, job);
   }
+  const jobIds = new Set(job.ids);
   let latestStatus: CloudStatus | undefined;
   const reconnectingRequest = async (url: string, init: RequestInit) => {
     for (;;) {
@@ -261,7 +262,7 @@ export async function loadCloudOwnerSnapshots(
       throw new Error("Background scan returned invalid progress.");
     for (const snapshot of status.snapshots as OwnerSnapshot[]) {
       if (
-        !job.ids.includes(snapshot.id) ||
+        !jobIds.has(snapshot.id) ||
         !Array.isArray(snapshot.own) ||
         !snapshot.own.every((id) => typeof id === "string") ||
         typeof snapshot.name !== "string" ||

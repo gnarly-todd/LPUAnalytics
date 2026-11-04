@@ -32,6 +32,7 @@ import {
 } from "./top-owner-profiles";
 import {
   matchWishlistOwners,
+  rankWishlistOwnerMatches,
   sortWishlistRows,
   type WishlistSort,
   type WishlistProfile,
@@ -164,6 +165,7 @@ export default function WishlistOwnerTable({
     setCacheCount(0);
     setFreshCount(0);
     setScanBusy(true);
+    const resolvedSnapshots = new WeakMap<object, WishlistProfile>();
     async function run() {
       if (!activeProfile.locks.some((lock) => lock.status === "Wishlist")) {
         setScanBusy(false);
@@ -178,7 +180,20 @@ export default function WishlistOwnerTable({
           force,
           signal,
           onProgress: (progress) => {
-            setLoaded(progress.snapshots.map(snapshotProfile));
+            const next = progress.snapshots.map((snapshot) => {
+              let profile = resolvedSnapshots.get(snapshot);
+              if (!profile) {
+                profile = snapshotProfile(snapshot);
+                resolvedSnapshots.set(snapshot, profile);
+              }
+              return profile;
+            });
+            setLoaded((current) =>
+              current.length === next.length &&
+              current.every((profile, index) => profile === next[index])
+                ? current
+                : next,
+            );
             setProcessed(progress.processed);
             setCacheCount(progress.cached);
             setFreshCount(progress.fresh);
@@ -269,22 +284,40 @@ export default function WishlistOwnerTable({
     () => sortWishlistRows(matches, sort, insightData.demand),
     [matches, sort, insightData.demand],
   );
-  const fetchedTimes = owners.map((owner) => Date.parse(owner.refreshedAt)).filter(Number.isFinite);
-  const oldestFetchedAt = fetchedTimes.length ? Math.min(...fetchedTimes) : null;
-  const newestFetchedAt = fetchedTimes.length ? Math.max(...fetchedTimes) : null;
+  const topMatchingOwners = useMemo(() => rankWishlistOwnerMatches(matches).slice(0, 5), [matches]);
+  const { oldestFetchedAt, newestFetchedAt } = useMemo(() => {
+    let oldest: number | null = null;
+    let newest: number | null = null;
+    for (const owner of owners) {
+      const time = Date.parse(owner.refreshedAt);
+      if (!Number.isFinite(time)) continue;
+      oldest = oldest === null ? time : Math.min(oldest, time);
+      newest = newest === null ? time : Math.max(newest, time);
+    }
+    return { oldestFetchedAt: oldest, newestFetchedAt: newest };
+  }, [owners]);
   const search = query.trim().toLocaleLowerCase();
-  const unmatchedRows = rows.filter((row) => !row.owners.length);
-  const filteredRows = rows.filter(({ lock, owners: matched }) => {
-    if (!matched.length) return false;
-    return (
-      !search ||
-      [lock.name, lock.version, lock.beltLevel ?? lock.belt, ...matched.map((owner) => owner.name)]
-        .filter(Boolean)
-        .join(" ")
-        .toLocaleLowerCase()
-        .includes(search)
-    );
-  });
+  const unmatchedRows = useMemo(() => rows.filter((row) => !row.owners.length), [rows]);
+  const filteredRows = useMemo(
+    () =>
+      rows.filter(({ lock, owners: matched }) => {
+        if (!matched.length) return false;
+        return (
+          !search ||
+          [
+            lock.name,
+            lock.version,
+            lock.beltLevel ?? lock.belt,
+            ...matched.map((owner) => owner.name),
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLocaleLowerCase()
+            .includes(search)
+        );
+      }),
+    [rows, search],
+  );
   const visibleRows = filteredRows.slice(0, visibleCount);
   useEffect(() => {
     setVisibleCount(30);
@@ -305,7 +338,7 @@ export default function WishlistOwnerTable({
             : "desc",
     }));
   };
-  const failed = members.filter((p) => errors[p.id]);
+  const failed = useMemo(() => members.filter((p) => errors[p.id]), [members, errors]);
   const refreshOwners = (force = false) => {
     scanRequested.current = true;
     forceRefresh.current = force;
@@ -373,7 +406,7 @@ export default function WishlistOwnerTable({
     : busy && backgroundState === "submitting"
       ? "Sending scan to the server…"
       : busy && backgroundState === "queued"
-        ? "Scan queued on the server — safe to lock your phone"
+        ? "Scan queued on the server"
         : busy && pauseMessage
           ? "Cooldown — remaining profiles will load automatically"
           : busy
@@ -403,9 +436,9 @@ export default function WishlistOwnerTable({
       >
         <h2 id="load-more-title">Load more profiles</h2>
         <p>
-          Choose how many additional ranked profiles to check. The scan automatically resumes after
-          LPU cooldowns. You can minimize Safari or lock your phone; progress is saved on the
-          server.
+          Choose how many additional ranked profiles to check. Progress is saved on the server.
+          After an LPU cooldown, the background runner resumes the scan when it checks in; scheduled
+          starts can be delayed while Safari is closed or your phone is locked.
         </p>
         <form
           onSubmit={(event) => {
@@ -475,14 +508,11 @@ export default function WishlistOwnerTable({
           <span className="wishlist-scope-badge">Manual refresh · 7-day cache</span>
         </div>
         <p className="wishlist-scan-help">
-          Load top {requestedCount} — cache first reuses profiles saved on this device for up to 7
-          days. Load more lets you choose how many additional profiles to fetch and saves each as it
-          arrives. Rate limits pause the scan; it resumes automatically after each cooldown, even
-          with Safari minimized or your phone locked. Keep going to 1,000 profiles or beyond while
-          LPU allows requests. Fetch latest refreshes your selected range. Opening this screen or
-          switching profiles reuses all valid cached owners on this device. New scans start with a
-          server batch immediately. The background runner stays active through cooldowns; scheduled
-          starts can be delayed.
+          Cache first reuses profiles saved on this device for up to 7 days. Load more lets you
+          choose how many additional profiles to check; Fetch latest refreshes your selected range.
+          Scans save progress on the server and can continue when your phone is locked. After a
+          cooldown, the background runner resumes when available; scheduled starts can be delayed.
+          Switching profiles reuses valid cached owners on this device.
         </p>
         <div className="wishlist-owner-toolbar">
           <div className="wishlist-owner-actions">
@@ -607,8 +637,8 @@ export default function WishlistOwnerTable({
           <strong>Requests are temporarily limited</strong>
           <p>{pauseMessage}</p>
           <p>
-            The remaining profiles will load automatically after <DataTimestamp value={resumeAt} />.
-            Your phone can remain locked. Loaded matches remain available.
+            The remaining profiles can resume after <DataTimestamp value={resumeAt} /> when the
+            background runner checks in. Loaded matches remain available.
           </p>
         </div>
       )}
@@ -686,6 +716,41 @@ export default function WishlistOwnerTable({
             </div>
           ) : (
             <>
+              {topMatchingOwners.length > 0 && (
+                <section
+                  className="wishlist-top-matches"
+                  aria-labelledby="wishlist-top-matches-heading"
+                >
+                  <h3 id="wishlist-top-matches-heading">Owners with the most wishlist matches</h3>
+                  <p>
+                    Top matches among {owners.length.toLocaleString()} loaded profiles. Expand an
+                    owner to see the matching locks.
+                  </p>
+                  <ol>
+                    {topMatchingOwners.map(({ profile: owner, locks: matchingLocks }) => (
+                      <li key={owner.id}>
+                        <div>
+                          <a href={owner.url} target="_blank" rel="noreferrer">
+                            {owner.name} ↗
+                          </a>
+                          <strong>
+                            {matchingLocks.length}{" "}
+                            {matchingLocks.length === 1 ? "match" : "matches"}
+                          </strong>
+                        </div>
+                        <details>
+                          <summary>View matching locks</summary>
+                          <ul>
+                            {matchingLocks.map((lock) => (
+                              <li key={lock.id}>{lock.name}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              )}
               <div className="wishlist-results-heading">
                 <h3>Wishlist locks with owners</h3>
                 <p>
