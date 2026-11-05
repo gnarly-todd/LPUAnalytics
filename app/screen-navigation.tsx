@@ -44,6 +44,78 @@ export const screens = [
 export type ScreenId = (typeof screens)[number]["id"];
 export type NavigateScreen = (screen: ScreenId) => void;
 
+type ScreenArtwork = {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+  fullFrame?: boolean;
+  credit?: {
+    artist: string;
+    source: string;
+    license: string;
+    licenseUrl?: string;
+    changes: string;
+  };
+};
+const screenArtwork: Partial<Record<ScreenId, ScreenArtwork>> = {
+  analysis: {
+    src: "lock-collection.jpg",
+    alt: "A collection of cutaway locks and padlocks",
+    width: 960,
+    height: 639,
+    credit: {
+      artist: "Dennis van Zuijlekom",
+      source:
+        "https://commons.wikimedia.org/wiki/File:Collection_of_Cutaway_Locks_and_Padlocks.jpg",
+      license: "CC BY-SA 2.0",
+      licenseUrl: "https://creativecommons.org/licenses/by-sa/2.0/",
+      changes: "resized and cropped",
+    },
+  },
+  community: {
+    src: "locksport-toolkit.jpg",
+    alt: "A selection of lock picks and tension tools",
+    width: 1692,
+    height: 672,
+    credit: {
+      artist: "Chris Mitchell",
+      source: "https://commons.wikimedia.org/wiki/File:Lockpicking_Tools.jpg",
+      license: "public domain",
+      changes: "cropped",
+    },
+  },
+  "lpu-insights": {
+    src: "locksport-picks.png",
+    alt: "A selection of single-pin and dimple picks",
+    width: 960,
+    height: 720,
+    fullFrame: true,
+    credit: {
+      artist: "Lukkojaska",
+      source: "https://commons.wikimedia.org/wiki/File:Single-Pin_Picking_Lockpicks.png",
+      license: "CC BY-SA 4.0",
+      licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/",
+      changes: "resized",
+    },
+  },
+  explorer: { src: "lock-mechanism.svg", alt: "", width: 480, height: 240 },
+  "wishlist-owners": {
+    src: "locksport-tensioners.png",
+    alt: "A selection of tension tools",
+    width: 960,
+    height: 720,
+    fullFrame: true,
+    credit: {
+      artist: "Lukkojaska",
+      source: "https://commons.wikimedia.org/wiki/File:Tension_Wrenches.png",
+      license: "CC BY-SA 4.0",
+      licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/",
+      changes: "resized",
+    },
+  },
+};
+
 export function screenFromHash(hash: string): ScreenId {
   const key = hash.replace(/^#\/?/, "").split(/[/?]/)[0];
   // Legacy Collection summary links now open Home.
@@ -187,10 +259,9 @@ export function ScreenHeading({
   onNavigate: NavigateScreen;
 }) {
   const item = screens.find((item) => item.id === screen)!;
+  const artwork = screenArtwork[screen];
   return (
-    <header
-      className={`screen-heading ${screen === "lpu-insights" ? "screen-heading-with-art" : ""}`}
-    >
+    <header className={`screen-heading ${artwork ? "screen-heading-with-art" : ""}`}>
       <a
         href={screenHref("home")}
         onClick={(event) => {
@@ -205,16 +276,37 @@ export function ScreenHeading({
         {item.label}
       </h1>
       <p>{item.description}</p>
-      {screen === "lpu-insights" && (
-        <img
-          className="screen-heading-art"
-          src="lock-mechanism.svg"
-          width="480"
-          height="240"
-          alt=""
-          aria-hidden="true"
-          decoding="async"
-        />
+      {artwork && (
+        <figure
+          className={`screen-heading-figure${artwork.fullFrame ? " screen-heading-figure-full" : ""}`}
+        >
+          <img
+            className="screen-heading-art"
+            src={artwork.src}
+            width={artwork.width}
+            height={artwork.height}
+            alt={artwork.alt}
+            loading="lazy"
+            decoding="async"
+          />
+          {artwork.credit && (
+            <figcaption>
+              Photo:{" "}
+              <a href={artwork.credit.source} target="_blank" rel="noreferrer">
+                {artwork.credit.artist}
+              </a>
+              {" · "}
+              {artwork.credit.licenseUrl ? (
+                <a href={artwork.credit.licenseUrl} target="_blank" rel="noreferrer">
+                  {artwork.credit.license}
+                </a>
+              ) : (
+                artwork.credit.license
+              )}
+              {` · ${artwork.credit.changes}`}
+            </figcaption>
+          )}
+        </figure>
       )}
     </header>
   );
@@ -253,29 +345,46 @@ export function HomeSummary({
           </p>
         </div>
         <figure className="home-lock-photo">
-          <img
-            src="lock-collection.jpg"
-            width="960"
-            height="639"
-            alt="A collection of cutaway locks and padlocks"
-            decoding="async"
-          />
+          <div className="home-tool-photos">
+            <img
+              src="locksport-picks-small.png"
+              width="330"
+              height="248"
+              alt="A selection of lock picks"
+              decoding="async"
+            />
+            <img
+              src="locksport-tensioners-small.png"
+              width="330"
+              height="248"
+              alt="A selection of tension tools"
+              decoding="async"
+            />
+          </div>
           <figcaption>
-            Photo:{" "}
+            Photos by Lukkojaska:{" "}
             <a
-              href="https://commons.wikimedia.org/wiki/File:Collection_of_Cutaway_Locks_and_Padlocks.jpg"
+              href="https://commons.wikimedia.org/wiki/File:Single-Pin_Picking_Lockpicks.png"
               target="_blank"
               rel="noreferrer"
             >
-              Dennis van Zuijlekom
+              picks
             </a>
             {" · "}
             <a
-              href="https://creativecommons.org/licenses/by-sa/2.0/"
+              href="https://commons.wikimedia.org/wiki/File:Tension_Wrenches.png"
               target="_blank"
               rel="noreferrer"
             >
-              CC BY-SA 2.0
+              tension tools
+            </a>
+            {" · "}
+            <a
+              href="https://creativecommons.org/licenses/by-sa/4.0/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              CC BY-SA 4.0
             </a>
             {" · resized and cropped"}
           </figcaption>
