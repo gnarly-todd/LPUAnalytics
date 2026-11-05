@@ -32,7 +32,8 @@ export const screens = [
   {
     id: "wishlist-owners",
     label: "Wishlist owners",
-    description: "Find wishlist owners in ranked profiles, with custom load counts and automatic cooldown resumes.",
+    description:
+      "Find wishlist owners in ranked profiles, with custom load counts and automatic cooldown resumes.",
   },
   {
     id: "compare",
@@ -187,7 +188,9 @@ export function ScreenHeading({
 }) {
   const item = screens.find((item) => item.id === screen)!;
   return (
-    <header className="screen-heading">
+    <header
+      className={`screen-heading ${screen === "lpu-insights" ? "screen-heading-with-art" : ""}`}
+    >
       <a
         href={screenHref("home")}
         onClick={(event) => {
@@ -202,6 +205,17 @@ export function ScreenHeading({
         {item.label}
       </h1>
       <p>{item.description}</p>
+      {screen === "lpu-insights" && (
+        <img
+          className="screen-heading-art"
+          src="lock-mechanism.svg"
+          width="480"
+          height="240"
+          alt=""
+          aria-hidden="true"
+          decoding="async"
+        />
+      )}
     </header>
   );
 }
@@ -227,15 +241,45 @@ export function HomeSummary({
 }) {
   return (
     <section className="home-summary" aria-labelledby="screen-title">
-      <header>
-        <p className="eyebrow">Lock Pickers United analytics</p>
-        <h1 id="screen-title" tabIndex={-1}>
-          {name}’s lock collection
-        </h1>
-        <p>
-          An overview of your LPU collection. Explore locks, track your picking, and plan what comes
-          next.
-        </p>
+      <header className="home-summary-intro">
+        <div className="home-summary-copy">
+          <p className="eyebrow">Lock Pickers United analytics</p>
+          <h1 id="screen-title" tabIndex={-1}>
+            {name}’s lock collection
+          </h1>
+          <p>
+            An overview of your LPU collection. Explore locks, track your picking, and plan what
+            comes next.
+          </p>
+        </div>
+        <figure className="home-lock-photo">
+          <img
+            src="lock-collection.jpg"
+            width="960"
+            height="639"
+            alt="A collection of cutaway locks and padlocks"
+            decoding="async"
+          />
+          <figcaption>
+            Photo:{" "}
+            <a
+              href="https://commons.wikimedia.org/wiki/File:Collection_of_Cutaway_Locks_and_Padlocks.jpg"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Dennis van Zuijlekom
+            </a>
+            {" · "}
+            <a
+              href="https://creativecommons.org/licenses/by-sa/2.0/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              CC BY-SA 2.0
+            </a>
+            {" · resized and cropped"}
+          </figcaption>
+        </figure>
       </header>
       <dl className="home-summary-counts">
         {[
