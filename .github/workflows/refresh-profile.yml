@@ -95,7 +95,7 @@ jobs:
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          if git diff --quiet -- app/data.ts app/community-insights-data.json; then
+          if git diff --quiet -- app/data.ts app/community-insights-data.json public/lock-photos.json; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "LPU profile data is already current."
             exit 0
@@ -103,7 +103,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/data.ts app/community-insights-data.json
+          git add app/data.ts app/community-insights-data.json public/lock-photos.json
           git commit -m "Refresh LPU profile data"
           git push origin "HEAD:${DEFAULT_BRANCH}"
           echo "changed=true" >> "$GITHUB_OUTPUT"

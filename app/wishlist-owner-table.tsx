@@ -7,6 +7,7 @@ import {
   stopCloudScan,
 } from "./cloud-owner-scans";
 import ServerScanStatus from "./server-scan-progress";
+import { WishlistLockPhoto } from "./wishlist-lock-photo";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { beltColors, type LockRecord } from "./data";
 import { useCommunityInsights } from "./community-insights";
@@ -880,6 +881,7 @@ export default function WishlistOwnerTable({
                           </div>
                           {lock.version && <p className="wishlist-lock-version">{lock.version}</p>}
                           <WishlistRank lock={lock} />
+                          <WishlistLockPhoto lock={lock} />
                           <dl className="wishlist-mobile-stats">
                             <div>
                               <dt>Loaded owners</dt>
@@ -976,6 +978,7 @@ export default function WishlistOwnerTable({
                             </th>
                             <td>
                               <WishlistRank lock={lock} />
+                              <WishlistLockPhoto lock={lock} />
                             </td>
                             <td className="wishlist-numeric">
                               <span className="wishlist-owner-total">

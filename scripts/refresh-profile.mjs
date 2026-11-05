@@ -1,10 +1,12 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { buildLockPhotoIndex } from "../app/lock-photo-sources.mjs";
 
 const PROFILE_ID = "84dULJFIN4bHIC1LxCiuvBCSqT43";
 const LPU_USER_API = "https://api.lpubelts.com/api/v1/users";
 const LPU_DATA =
   "https://raw.githubusercontent.com/Lockpickers-United/lpu-belt-explorer/main/apps/web/src/data/data.json";
 const DATA_FILE = new URL("../app/data.ts", import.meta.url);
+const PHOTO_FILE = new URL("../public/lock-photos.json", import.meta.url);
 
 async function getText(url) {
   const response = await fetch(url, {
@@ -153,7 +155,9 @@ if (/export const profileCollectionsSnapshot: Record<string, string\[\]> = [^;]*
     `$1\n\n${extraSnapshot}`,
   );
 }
+const photoIndex = buildLockPhotoIndex(allEntries);
 await writeFile(DATA_FILE, source);
+await writeFile(PHOTO_FILE, `${JSON.stringify(photoIndex)}\n`);
 
 console.log(
   `Refreshed ${selectedEntries.length} locks: ${ownedIds.length} owned, ` +

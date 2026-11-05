@@ -398,6 +398,16 @@
   .screen-heading-figure-full { width: 108px; }
   .screen-heading-figure-full .screen-heading-art { height: 81px; }
   .screen-heading-figure figcaption { font-size: 9px; }
+  .screen-heading-analysis.screen-heading-with-art {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .screen-heading-analysis .screen-heading-figure {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    margin-top: 18px;
+  }
+  .screen-heading-analysis .screen-heading-art { height: 165px; }
+  .screen-heading-analysis .screen-heading-figure figcaption { font-size: 11px; }
   .site-shell .app-screen > .section {
     padding-top: 24px;
   }

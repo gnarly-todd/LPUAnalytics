@@ -337,7 +337,7 @@
   width: 24%;
 }
 .wishlist-col-rank {
-  width: 13%;
+  width: 18%;
 }
 .wishlist-col-number {
   width: 10%;
@@ -346,7 +346,7 @@
   width: 13%;
 }
 .wishlist-col-owners {
-  width: 40%;
+  width: 35%;
 }
 .wishlist-owner-table :is(th, td) {
   text-align: left;
@@ -452,6 +452,49 @@
   color: var(--text);
   background: var(--surface-soft);
 }
+.wishlist-photo {
+  margin-top: 6px;
+  min-width: 0;
+}
+.wishlist-photo summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  color: var(--wishlist-link);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+  list-style: none;
+}
+.wishlist-photo summary::-webkit-details-marker { display: none; }
+.wishlist-photo summary::before { content: "▸"; font-size: 15px; }
+.wishlist-photo[open] summary::before { content: "▾"; }
+.wishlist-photo-content p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.wishlist-photo figure { margin: 4px 0 0; }
+.wishlist-photo img {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+  max-height: 300px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+.wishlist-photo figcaption {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.wishlist-photo figcaption a { color: inherit; text-underline-offset: 2px; }
 .wishlist-rank-label i {
   width: 9px;
   height: 9px;

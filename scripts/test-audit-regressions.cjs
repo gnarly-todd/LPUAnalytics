@@ -67,6 +67,7 @@ assert.throws(() => settings.setItem("active", "lost"), /could not save profile 
   const source = fs
     .readFileSync(path.join(root, "scripts/refresh-profile.mjs"), "utf8")
     .replace('import { readFile, writeFile } from "node:fs/promises";', "")
+    .replace('import { buildLockPhotoIndex } from "../app/lock-photo-sources.mjs";', "")
     .replaceAll("import.meta.url", '"file:///project/scripts/refresh-profile.mjs"');
   for (const collections of [
     { picked: [] },
@@ -82,6 +83,9 @@ assert.throws(() => settings.setItem("active", "lost"), /could not save profile 
         console,
         fetch: async (url) => Response.json(url.includes("/users/") ? data : []),
         readFile: async () => "",
+        buildLockPhotoIndex: () => {
+          throw new Error("Invalid snapshots must not build the photo index");
+        },
         writeFile: async () => {
           writes++;
         },

@@ -261,7 +261,9 @@ export function ScreenHeading({
   const item = screens.find((item) => item.id === screen)!;
   const artwork = screenArtwork[screen];
   return (
-    <header className={`screen-heading ${artwork ? "screen-heading-with-art" : ""}`}>
+    <header
+      className={`screen-heading ${artwork ? "screen-heading-with-art" : ""}${screen === "analysis" ? " screen-heading-analysis" : ""}`}
+    >
       <a
         href={screenHref("home")}
         onClick={(event) => {
