@@ -101,17 +101,16 @@ const screenArtwork: Partial<Record<ScreenId, ScreenArtwork>> = {
   },
   explorer: { src: "lock-mechanism.svg", alt: "", width: 480, height: 240 },
   "wishlist-owners": {
-    src: "locksport-tensioners.png",
-    alt: "A selection of tension tools",
+    src: "wishlist-cutaway-padlocks.jpg",
+    alt: "Four cutaway padlocks with their keys",
     width: 960,
-    height: 720,
-    fullFrame: true,
+    height: 640,
     credit: {
-      artist: "Lukkojaska",
-      source: "https://commons.wikimedia.org/wiki/File:Tension_Wrenches.png",
-      license: "CC BY-SA 4.0",
-      licenseUrl: "https://creativecommons.org/licenses/by-sa/4.0/",
-      changes: "resized",
+      artist: "Dennis van Zuijlekom",
+      source: "https://commons.wikimedia.org/wiki/File:Cutaway_Padlocks.jpg",
+      license: "CC BY-SA 2.0",
+      licenseUrl: "https://creativecommons.org/licenses/by-sa/2.0/",
+      changes: "resized and cropped",
     },
   },
 };
@@ -347,46 +346,29 @@ export function HomeSummary({
           </p>
         </div>
         <figure className="home-lock-photo">
-          <div className="home-tool-photos">
-            <img
-              src="locksport-picks-small.png"
-              width="330"
-              height="248"
-              alt="A selection of lock picks"
-              decoding="async"
-            />
-            <img
-              src="locksport-tensioners-small.png"
-              width="330"
-              height="248"
-              alt="A selection of tension tools"
-              decoding="async"
-            />
-          </div>
+          <img
+            src="home-padlock-collection.jpg"
+            width="960"
+            height="720"
+            alt="A collection of vintage padlocks"
+            decoding="async"
+          />
           <figcaption>
-            Photos by Lukkojaska:{" "}
+            Photo:{" "}
             <a
-              href="https://commons.wikimedia.org/wiki/File:Single-Pin_Picking_Lockpicks.png"
+              href="https://commons.wikimedia.org/wiki/File:Padlocks_collection_01.jpg"
               target="_blank"
               rel="noreferrer"
             >
-              picks
+              Kgbo
             </a>
             {" · "}
             <a
-              href="https://commons.wikimedia.org/wiki/File:Tension_Wrenches.png"
+              href="https://creativecommons.org/licenses/by-sa/3.0/"
               target="_blank"
               rel="noreferrer"
             >
-              tension tools
-            </a>
-            {" · "}
-            <a
-              href="https://creativecommons.org/licenses/by-sa/4.0/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              CC BY-SA 4.0
+              CC BY-SA 3.0
             </a>
             {" · resized and cropped"}
           </figcaption>
