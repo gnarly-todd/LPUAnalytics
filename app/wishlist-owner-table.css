@@ -705,6 +705,50 @@
   }
 }
 @media (max-width: 620px) {
+  .wishlist-top-matches {
+    padding: 16px;
+  }
+  .wishlist-top-matches > ol {
+    padding: 0;
+    list-style: none;
+    counter-reset: wishlist-owner-rank;
+  }
+  .wishlist-top-matches > ol > li {
+    display: grid;
+    grid-template-columns: 1.4em minmax(0, 1fr);
+    column-gap: 8px;
+    counter-increment: wishlist-owner-rank;
+  }
+  .wishlist-top-matches > ol > li::before {
+    content: counter(wishlist-owner-rank) ".";
+    grid-column: 1;
+    grid-row: 1;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+  }
+  .wishlist-top-matches > ol > li > div {
+    display: grid;
+    grid-column: 2;
+    grid-template-columns: minmax(0, 1fr) max-content;
+    align-items: start;
+    gap: 4px 8px;
+  }
+  .wishlist-top-matches > ol > li > div a {
+    min-width: 0;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+  .wishlist-top-matches > ol > li > div strong {
+    justify-self: end;
+    line-height: 1.5;
+    white-space: nowrap;
+  }
+  .wishlist-top-matches > ol > li > details {
+    grid-column: 2;
+    min-width: 0;
+  }
   .wishlist-owner-intro {
     margin-bottom: 20px;
   }

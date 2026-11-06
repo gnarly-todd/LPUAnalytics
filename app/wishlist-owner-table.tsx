@@ -727,7 +727,7 @@ export default function WishlistOwnerTable({
                     Top matches among {owners.length.toLocaleString()} loaded profiles. Expand an
                     owner to see the matching locks.
                   </p>
-                  <ol>
+                  <ol role="list">
                     {topMatchingOwners.map(({ profile: owner, locks: matchingLocks }) => (
                       <li key={owner.id}>
                         <div>
