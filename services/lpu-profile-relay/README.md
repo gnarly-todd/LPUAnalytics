@@ -20,6 +20,10 @@ any LPU cooldown; a five-minute Cloudflare Cron Trigger recovers missed wakes.
 The lease prevents overlapping checks. Each check processes up to 50 profiles,
 at most three concurrently, and persists progress every round. Temporary profile
 errors retry across up to three checks, then remain visible as failures.
+The relay reads LPU's remaining-request and reset headers and pauses before
+exhausting the published quota. At the start of each check it probes with one
+request so an already-exhausted quota does not trigger several penalties at
+once. If quota headers are missing, it still respects any `Retry-After` response.
 
 Submission starts a bounded three-profile batch using `ctx.waitUntil`, with
 single-attempt ten-second upstream timeouts. An open page can also request a

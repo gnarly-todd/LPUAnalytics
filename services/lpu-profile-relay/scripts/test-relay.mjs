@@ -22,6 +22,12 @@ const limited=createRelay({now:()=>clock,sleep:async()=>{},fetchUpstream:async u
 const pause=await limited.fetch(request());assert.equal(pause.status,429);assert.equal(pause.headers.get('retry-after'),'60');assert((await pause.json()).retryAt>clock);
 assert.equal((await limited.fetch(request('another-public-profile-id-001'))).status,429);assert.equal(limitedCalls,1);
 clock+=61000;assert.equal((await limited.fetch(request())).status,200);assert.equal(limitedCalls,2);
+const quotaNow=1_000_000;
+const quotaRelay=createRelay({now:()=>quotaNow,fetchUpstream:async url=>Response.json(payload(url.split('/').at(-1)),{headers:{'X-RateLimit-Remaining':'2','X-RateLimit-Reset':String((quotaNow+60000)/1000)}})});
+assert.deepEqual((await quotaRelay.readProfile(id)).quota,{remaining:2,resetAt:quotaNow+60000});
+assert.equal((await quotaRelay.readProfile(id)).quota,undefined,'A cache hit does not reuse old upstream quota headers');
+const badQuota=createRelay({now:()=>quotaNow,fetchUpstream:async url=>Response.json(payload(url.split('/').at(-1)),{headers:{'X-RateLimit-Remaining':'garbage','X-RateLimit-Reset':'1'}})});
+assert.equal((await badQuota.readProfile(id)).quota,undefined,'Invalid quota headers are ignored');
 let budgetCalls=0;
 const budget=createRelay({sleep:async()=>{},fetchUpstream:async url=>{budgetCalls++;return Response.json(payload(url.split('/').at(-1)));}});
 for(let n=0;n<1000;n++)assert.equal((await budget.fetch(request('budget-public-profile-'+String(n).padStart(4,'0')))).status,200);

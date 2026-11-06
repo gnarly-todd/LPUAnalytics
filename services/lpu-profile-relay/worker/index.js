@@ -2,7 +2,19 @@ const GITHUB_ORIGIN = "https://gnarly-todd.github.io";
 const UPSTREAM = "https://api.lpubelts.com/api/v1/users/";
 const WINDOW_MS = 20 * 60 * 1000;
 const CACHE_MS = 30_000;
+const SCAN_CONCURRENCY = 3;
+const QUOTA_RESET_MARGIN_MS = 1_000;
 const PUBLIC_COLLECTIONS = ["own", "wishlist", "picked", "recorded", "recordedLocks", "scorecard", "safelocksOwn", "safelocksCracked", "safelocksWishlist"];
+
+function readUpstreamQuota(headers, currentTime) {
+  const remainingValue = headers.get("x-ratelimit-remaining");
+  const resetValue = headers.get("x-ratelimit-reset");
+  if (!/^\d+$/.test(remainingValue || "") || !/^\d+$/.test(resetValue || "")) return undefined;
+  const remaining = Number(remainingValue);
+  const resetAt = Number(resetValue) * 1000;
+  if (!Number.isSafeInteger(remaining) || !Number.isSafeInteger(resetAt) || resetAt <= currentTime || resetAt > currentTime + WINDOW_MS) return undefined;
+  return { remaining, resetAt };
+}
 
 export function createRelay({ fetchUpstream = fetch, now = Date.now, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), requestTimeout = 20_000, maxAttempts = 2 } = {}) {
   const cache = new Map();
@@ -47,7 +59,9 @@ export function createRelay({ fetchUpstream = fetch, now = Date.now, sleep = (ms
         const result = { status: 200, fetchedAt, body: { data: { userId: id, displayName: typeof data.displayName === "string" ? data.displayName : "", collections }, metadata: { fetchedDateTime: new Date(fetchedAt).toISOString() } } };
         if (cache.size >= 200) cache.delete(cache.keys().next().value);
         cache.set(id, { result, until: fetchedAt + CACHE_MS });
-        return result;
+        // Only fresh upstream responses carry current quota information.
+        const quota = readUpstreamQuota(response.headers, fetchedAt);
+        return quota ? { ...result, quota } : result;
       }
     })().finally(() => pending.delete(id));
     pending.set(id, work);
@@ -172,9 +186,9 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = autho
         : await bucket.list({ prefix: "pending/", limit: 1000 });
       if (!list.objects.length) return { status: "idle", processed: 0, pending: 0 };
       const cooldown = await read(bucket, "state/scan-cooldown");
-      if (cooldown?.retryAt > now()) return { status: "cooldown", pending: list.objects.length, retryAt: cooldown.retryAt };
+      if (cooldown?.retryAt > now()) return { status: "cooldown", pending: list.objects.length, retryAt: cooldown.retryAt, ...(cooldown.reason ? { pauseReason: cooldown.reason } : {}) };
       const deadline = now() + 25_000;
-      let processed = 0, fetched = 0, cacheHits = 0;
+      let processed = 0, fetched = 0, cacheHits = 0, probedUpstream = false;
       for (const entry of list.objects.sort((a, b) => new Date(a.uploaded).getTime() - new Date(b.uploaded).getTime())) {
         const id = entry.key.slice(8);
         const job = await read(bucket, `jobs/${id}`);
@@ -189,14 +203,26 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = autho
         job.retryAt = 0;
         while (pending.length && processed < maxProfiles && now() < deadline) {
           if (await bucket.head(`cancelled/${id}`)) { job.state = "cancelled"; break; }
-          let rateAt = 0;
-          const batch = pending.splice(0, Math.min(3, maxProfiles - processed));
-          await Promise.all(batch.map(async ownerId => {
+          let rateAt = 0, pauseReason = "";
+          const batch = pending.splice(0, Math.min(SCAN_CONCURRENCY, maxProfiles - processed));
+          const toFetch = (await Promise.all(batch.map(async ownerId => {
             const saved = await read(bucket, `owners/${ownerId}`);
-            if (!job.force && isFresh(saved)) { done.add(ownerId); job.cached++; cacheHits++; return; }
+            if (!job.force && isFresh(saved)) { done.add(ownerId); job.cached++; cacheHits++; return null; }
+            return ownerId;
+          }))).filter(Boolean);
+          processed += batch.length - toFetch.length;
+          const fetchOwner = async ownerId => {
             let result;
             try { result = await readProfile(ownerId); } catch { result = { status: 502 }; }
-            if (result.status === 429) { rateAt = Math.max(rateAt, result.body?.retryAt || now() + WINDOW_MS); return; }
+            if (result.status === 429) {
+              rateAt = Math.max(rateAt, result.body?.retryAt || now() + WINDOW_MS);
+              pauseReason = "rate-limit";
+              return;
+            }
+            if (result.quota?.remaining <= SCAN_CONCURRENCY && result.quota.resetAt > now()) {
+              rateAt = Math.max(rateAt, result.quota.resetAt + QUOTA_RESET_MARGIN_MS);
+              if (!pauseReason) pauseReason = "quota-window";
+            }
             const data = result.body?.data;
             if (result.status !== 200 || !data?.displayName?.trim() || /^(no display name|anonymous|unnamed|undefined|null)$/i.test(data.displayName.trim())) {
               const attempts = (job.attempts[ownerId] || 0) + 1;
@@ -209,14 +235,25 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = autho
             done.add(ownerId);
             job.fresh++;
             fetched++;
-          }));
-          processed += batch.length;
+          };
+          // Start each queue check with one upstream request. If another client
+          // has exhausted the shared quota, one rejection avoids multiplying
+          // LPU's penalty before the remaining requests can be stopped.
+          if (!probedUpstream && toFetch.length) {
+            await fetchOwner(toFetch.shift());
+            processed++;
+            probedUpstream = true;
+          }
+          if (!rateAt && toFetch.length) {
+            await Promise.all(toFetch.map(fetchOwner));
+            processed += toFetch.length;
+          }
           job.done = [...done];
           job.updatedAt = now();
           if (rateAt) {
             job.state = "cooldown";
             job.retryAt = rateAt;
-            await put(bucket, "state/scan-cooldown", { retryAt: rateAt });
+            await put(bucket, "state/scan-cooldown", { retryAt: rateAt, reason: pauseReason });
           }
           if (await bucket.head(`cancelled/${id}`)) job.state = "cancelled";
           await put(bucket, `jobs/${id}`, job);
@@ -231,7 +268,8 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = autho
       }
       const remaining = await bucket.list({ prefix: "pending/", limit: 1000 });
       const remainingCooldown = await read(bucket, "state/scan-cooldown");
-      return { status: "checked", processed, fetched, cacheHits, pending: remaining.objects.length, retryAt: remainingCooldown?.retryAt > now() ? remainingCooldown.retryAt : 0 };
+      const waiting = remainingCooldown?.retryAt > now();
+      return { status: "checked", processed, fetched, cacheHits, pending: remaining.objects.length, retryAt: waiting ? remainingCooldown.retryAt : 0, ...(waiting && remainingCooldown.reason ? { pauseReason: remainingCooldown.reason } : {}) };
     } finally {
       await put(bucket, "state/scan-lease", { until: 0 }, { onlyIf: { etagMatches: lease.etag } });
     }

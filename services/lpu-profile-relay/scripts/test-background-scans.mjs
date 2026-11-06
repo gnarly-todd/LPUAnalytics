@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createScanQueue, verifyScanRunner, verifySchedulerSecret } from "../worker/index.js";
+import { createRelay, createScanQueue, verifyScanRunner, verifySchedulerSecret } from "../worker/index.js";
 import { authorized as schedulerAuthorized, createScheduler } from "../../lpu-scan-scheduler/worker/core.mjs";
 import { randomUUID, webcrypto } from "node:crypto";
 import fs from "node:fs";
@@ -299,3 +299,58 @@ assert.equal((await integrationBucket.list({ prefix: "pending/", limit: 100 })).
 console.log(
   "PASS: a closed-browser scan wakes, respects a real cooldown, and resumes to completion.",
 );
+
+// Model the upstream fixed window, including its penalty for a 429. A scan
+// should pause from successful response headers before triggering that penalty.
+let quotaClock = 1_000_000, resetAt = quotaClock + 60_000, remaining = 60;
+let quotaRequests = 0, rejections = 0, pauses = 0;
+const quotaBucket = new Bucket();
+const quotaRelay = createRelay({
+  now: () => quotaClock,
+  fetchUpstream: async url => {
+    if (quotaClock >= resetAt) { resetAt = quotaClock + 60_000; remaining = 60; }
+    quotaRequests++;
+    if (!remaining) { rejections++; return new Response("", { status: 429, headers: { "Retry-After": "90" } }); }
+    remaining--;
+    const ownerId = decodeURIComponent(url.split("/").at(-1));
+    return Response.json({ data: { userId: ownerId, displayName: "Owner", collections: { own: [], wishlist: [], picked: [] } } }, {
+      headers: { "X-RateLimit-Remaining": String(remaining), "X-RateLimit-Reset": String(resetAt / 1000) },
+    });
+  },
+});
+const quotaQueue = createScanQueue({ now: () => quotaClock, authorize: async () => true, readProfile: quotaRelay.readProfile });
+const quotaId = randomUUID();
+const quotaEnv = { BUCKET: quotaBucket };
+await quotaQueue.fetch(new Request(origin + "/api/owner-scans", { method: "POST", body: JSON.stringify({ id: quotaId, ids: ids.slice(0, 130), force: true }) }), quotaEnv);
+for (let i = 0; i < 10; i++) {
+  const result = await (await quotaQueue.fetch(new Request(origin + "/api/owner-scans/tick", { method: "POST" }), quotaEnv)).json();
+  if (result.retryAt > quotaClock) {
+    pauses++;
+    assert.equal(result.pauseReason, "quota-window");
+    const beforeWait = quotaRequests;
+    const waiting = await (await quotaQueue.fetch(new Request(origin + "/api/owner-scans/tick", { method: "POST" }), quotaEnv)).json();
+    assert.equal(waiting.status, "cooldown");
+    assert.equal(quotaRequests, beforeWait, "No upstream requests are made before the reset");
+    quotaClock = result.retryAt;
+  }
+  if (!result.pending) break;
+}
+const quotaJob = await (await quotaBucket.get(`jobs/${quotaId}`)).json();
+assert.equal(quotaJob.state, "complete");
+assert.equal(quotaJob.fresh, 130);
+assert.equal(quotaRequests, 130);
+assert.equal(rejections, 0, "The scan stays below the upstream limit");
+assert.equal(pauses, 2);
+
+// If quota was consumed elsewhere between checks, only the first request is
+// sent until we know whether the API will accept another concurrent batch.
+let probeCalls = 0;
+const probeBucket = new Bucket();
+const probeQueue = createScanQueue({ now: () => quotaClock, authorize: async () => true, readProfile: async () => { probeCalls++; return { status: 429, body: { retryAt: quotaClock + 90_000 } }; } });
+const probeId = randomUUID();
+await probeQueue.fetch(new Request(origin + "/api/owner-scans", { method: "POST", body: JSON.stringify({ id: probeId, ids: ids.slice(0, 3), force: true }) }), { BUCKET: probeBucket });
+const probeResult = await (await probeQueue.fetch(new Request(origin + "/api/owner-scans/tick", { method: "POST" }), { BUCKET: probeBucket })).json();
+assert.equal(probeCalls, 1, "Only one request is rejected when starting with an exhausted quota");
+assert.equal(probeResult.pauseReason, "rate-limit");
+assert.equal(probeResult.pending, 1);
+console.log("PASS: proactive quota pauses avoid repeated upstream penalties and resume safely.");
