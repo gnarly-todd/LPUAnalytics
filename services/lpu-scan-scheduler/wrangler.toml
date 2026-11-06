@@ -1,0 +1,14 @@
+name = "lpu-scan-scheduler"
+main = "worker/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[durable_objects]
+bindings = [{ name = "SCAN_SCHEDULER", class_name = "ScanScheduler" }]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ScanScheduler"]

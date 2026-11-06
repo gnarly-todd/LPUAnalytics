@@ -21,3 +21,10 @@ Keep the workflow enabled in GitHub Actions. GitHub can disable schedules after 
 ### Runner scheduling repair
 
 Submission starts a bounded three-profile batch using `ctx.waitUntil`, with single-attempt ten-second upstream timeouts. The open page can request additional scoped batches through `POST /api/owner-scans/<id>?action=advance`. The global lease and persistent cooldown protect all entry points. The authenticated GitHub runner drains the queue until empty, checks cooldowns once per minute, refreshes OIDC on every request, and hands pending work to a new `workflow_dispatch` before its 150-minute execution budget. The backup cron uses `*/5`, but GitHub scheduled starts remain best effort. The UI shows the runner heartbeat and warns if it has not checked in. Multiple pending scans rotate after each batch to avoid starving later submissions.
+
+### Durable scheduler migration
+
+The relay also supports an independently hosted Durable Object scheduler, with
+authenticated wake and tick requests. See `../lpu-scan-scheduler/README.md`
+for configuration, staged rollout, verification, and rollback. The existing
+GitHub runner continues to work until the scheduler is configured and verified.

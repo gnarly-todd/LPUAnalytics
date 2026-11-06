@@ -79,7 +79,7 @@ export function createRelay({ fetchUpstream = fetch, now = Date.now, sleep = (ms
 
 
 
-// Durable scans: only the pinned GitHub workflow can advance the queue.
+// Durable scans: only an authenticated background runner can advance the queue.
 const SCAN_ORIGIN = "https://todd-lpu-profile-relay.nicelife70117.chatgpt.site";
 const SCAN_TTL = 7 * 86400_000;
 const validId = value => typeof value === "string" && /^[A-Za-z0-9_-]{20,128}$/.test(value);
@@ -110,10 +110,47 @@ export async function verifyScanRunner(request, fetchKeys = fetch, now = Date.no
   } catch { return false; }
 }
 
-export function createScanQueue({ readProfile, now = Date.now, authorize = verifyScanRunner } = {}) {
+export async function verifySchedulerSecret(request, secret) {
+  if (typeof secret !== "string" || secret.length < 32) return false;
+  const header = request.headers.get("authorization") || "";
+  if (!header.startsWith("Bearer ")) return false;
+  const encode = new TextEncoder();
+  const [supplied, expected] = await Promise.all(
+    [header.slice(7), secret].map(
+      async (value) => new Uint8Array(await crypto.subtle.digest("SHA-256", encode.encode(value))),
+    ),
+  );
+  let difference = 0;
+  for (let i = 0; i < expected.length; i++) difference |= supplied[i] ^ expected[i];
+  return difference === 0;
+}
+
+async function authorizeScanRunner(request, env) {
+  if (await verifySchedulerSecret(request, env?.SCAN_TICK_SECRET)) return true;
+  // Keep the existing authenticated runner available while migrating jobs.
+  return verifyScanRunner(request);
+}
+
+export function createScanQueue({ readProfile, now = Date.now, authorize = authorizeScanRunner, fetchScheduler = fetch } = {}) {
   const read = async (bucket, key) => { const object = await bucket.get(key); return object ? object.json() : null; };
   const put = (bucket, key, value, options = {}) => bucket.put(key, JSON.stringify(value), { httpMetadata: { contentType: "application/json" }, ...options });
   const isFresh = snapshot => snapshot && Number.isFinite(snapshot.fetchedAt) && snapshot.fetchedAt <= now() && snapshot.fetchedAt > now() - SCAN_TTL;
+  async function wakeScheduler(env) {
+    if (!env.SCAN_SCHEDULER_URL) return; // Legacy runner remains usable until configured.
+    if (typeof env.SCAN_WAKE_SECRET !== "string" || env.SCAN_WAKE_SECRET.length < 32)
+      throw new Error("The background scheduler is not configured.");
+    const url = new URL(env.SCAN_SCHEDULER_URL);
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash)
+      throw new Error("The background scheduler address is invalid.");
+    url.pathname = "/wake";
+    const response = await fetchScheduler(url.toString(), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.SCAN_WAKE_SECRET}` },
+      signal: AbortSignal.timeout(8_000),
+      redirect: "manual",
+    });
+    if (!response.ok) throw new Error("The background scheduler did not accept the scan.");
+  }
   async function tick(bucket, { jobId, maxProfiles = 50 } = {}) {
     const lock = await bucket.get("state/scan-lease");
     if (lock && (await lock.json()).until > now()) return { status: "already-running", pending: 1 };
@@ -218,7 +255,7 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = verif
         return reply({ serverTime: now(), runnerLastSeenAt: runner?.checkedAt || 0, pending: pending.objects.length, retryAt: cooldown?.retryAt || 0, lastBatch });
       }
       if (url.pathname === "/api/owner-scans/tick") {
-        if (request.method !== "POST" || !await authorize(request)) return reply({ message: "Runner authorization required." }, 403);
+        if (request.method !== "POST" || !await authorize(request, env)) return reply({ message: "Runner authorization required." }, 403);
         await put(bucket, "state/scan-runner", { checkedAt: now() });
         const result = await tick(bucket);
         const previous = await read(bucket, "state/scan-last-result");
@@ -232,11 +269,22 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = verif
         let body; try { body = JSON.parse(text); } catch { return reply({ message: "Invalid scan request." }, 400); }
         if (!validJob(body.id) || !Array.isArray(body.ids) || !body.ids.length || !body.ids.every(validId) || typeof body.force !== "boolean") return reply({ message: "Valid public profile IDs are required." }, 400);
         const existing = await read(bucket, `jobs/${body.id}`);
-        if (existing) return reply({ id: body.id, state: existing.state }, 200);
+        if (existing) {
+          if (await bucket.head(`cancelled/${body.id}`)) return reply({ id: body.id, state: "cancelled" }, 200);
+          if (!["complete", "cancelled"].includes(existing.state)) {
+            // Recover a submission interrupted between writing the job and queue entry.
+            if (!await bucket.head(`pending/${body.id}`)) await put(bucket, `pending/${body.id}`, { createdAt: existing.createdAt });
+            try { await wakeScheduler(env); }
+            catch { return reply({ message: "The scan is saved, but the background scheduler could not start. Retrying is safe." }, 503); }
+          }
+          return reply({ id: body.id, state: existing.state }, 200);
+        }
         const job = { id: body.id, ids: [...new Set(body.ids)], force: body.force, state: "queued", done: [], errors: {}, attempts: {}, fresh: 0, cached: 0, retryAt: 0, createdAt: now(), updatedAt: now() };
         await put(bucket, `jobs/${body.id}`, job);
         // The runner reads pending entries independently of browser sessions.
         await put(bucket, `pending/${body.id}`, { createdAt: job.createdAt });
+        try { await wakeScheduler(env); }
+        catch { return reply({ message: "The scan is saved, but the background scheduler could not start. Retrying is safe." }, 503); }
         // The first bounded batch starts on submission, independent of cron.
         ctx?.waitUntil(tick(bucket, { jobId: body.id, maxProfiles: 3 }).catch(error => console.error("Initial scan batch failed", error.message)));
         return reply({ id: body.id, state: "queued" }, 202);

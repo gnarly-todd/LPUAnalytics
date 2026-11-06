@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { createScanQueue, verifyScanRunner } from "../worker/index.js";
+import { createScanQueue, verifyScanRunner, verifySchedulerSecret } from "../worker/index.js";
+import { authorized as schedulerAuthorized, createScheduler } from "../../lpu-scan-scheduler/worker/index.js";
 import { randomUUID, webcrypto } from "node:crypto";
 import fs from "node:fs";
 import vm from "node:vm";
@@ -167,3 +168,134 @@ await Promise.all(backgroundWork);
 assert.equal(calls-beforeBatch, 3, "Submission batch is bounded to three requests");
 await api(`/api/owner-scans/${batchId}`, { method:"DELETE" });
 console.log("PASS: runner drains multiple batches, waits through cooldowns, hands off long jobs, and starts a bounded batch on submission.");
+
+// A saved scan is not reported as accepted until the durable scheduler has
+// acknowledged it. Retrying the same submission must never duplicate it.
+const wakeSecret = "wake-" + "a".repeat(40);
+const tickSecret = "tick-" + "b".repeat(40);
+const authRequest = (secret) =>
+  new Request(origin, { headers: { Authorization: `Bearer ${secret}` } });
+assert(await verifySchedulerSecret(authRequest(tickSecret), tickSecret));
+assert.equal(await verifySchedulerSecret(authRequest("wrong"), tickSecret), false);
+assert.equal(await verifySchedulerSecret(authRequest(tickSecret), "short"), false);
+let wakes = 0;
+const scheduleBucket = new Bucket();
+const durableQueue = createScanQueue({
+  now: () => now,
+  authorize: async () => true,
+  readProfile: async () => {
+    throw new Error("No upstream request expected");
+  },
+  fetchScheduler: async (url, init) => {
+    wakes++;
+    assert.equal(url, "https://scheduler.example/wake");
+    assert.equal(init.headers.Authorization, `Bearer ${wakeSecret}`);
+    assert.equal(init.redirect, "manual");
+    if (wakes === 1) throw new Error("Temporary outage");
+    return new Response(null, { status: 202 });
+  },
+});
+const scanId = randomUUID();
+const body = JSON.stringify({ id: scanId, ids: ids.slice(0, 3), force: false });
+const schedulerEnv = {
+  BUCKET: scheduleBucket,
+  SCAN_SCHEDULER_URL: "https://scheduler.example",
+  SCAN_WAKE_SECRET: wakeSecret,
+};
+const submit = () =>
+  durableQueue.fetch(
+    new Request(origin + "/api/owner-scans", { method: "POST", body }),
+    schedulerEnv,
+  );
+assert.equal((await submit()).status, 503);
+assert(await scheduleBucket.head(`pending/${scanId}`), "A failed wake preserves the scan");
+await scheduleBucket.delete(`pending/${scanId}`);
+assert.equal((await submit()).status, 200, "The same saved job can be safely resubmitted");
+assert(await scheduleBucket.head(`pending/${scanId}`), "Retry repairs an interrupted queue write");
+assert.equal(wakes, 2);
+assert.equal((await scheduleBucket.list({ prefix: "pending/", limit: 100 })).objects.length, 1);
+console.log("PASS: scheduler authentication and idempotent scan recovery after a failed wake.");
+
+// Exercise the relay and the durable scheduler together after the browser has
+// disconnected, including an actual upstream cooldown and resumption.
+let clock = 1_000_000,
+  alarmAt = null,
+  reads = 0,
+  hitLimit = false;
+const integrationBucket = new Bucket();
+const schedulerState = {
+  storage: {
+    async getAlarm() {
+      return alarmAt;
+    },
+    async setAlarm(value) {
+      alarmAt = value;
+    },
+    async get() {
+      return 0;
+    },
+    async put() {},
+    async delete() {},
+  },
+};
+let integrationQueue;
+const integrationEnv = {
+  BUCKET: integrationBucket,
+  SCAN_TICK_SECRET: tickSecret,
+  SCAN_SCHEDULER_URL: "https://scheduler.example",
+  SCAN_WAKE_SECRET: wakeSecret,
+};
+const liveScheduler = createScheduler(schedulerState, integrationEnv, {
+  now: () => clock,
+  send: async (url, init) => integrationQueue.fetch(new Request(url, init), integrationEnv),
+});
+integrationQueue = createScanQueue({
+  now: () => clock,
+  readProfile: async (id) => {
+    reads++;
+    if (!hitLimit && reads === 4) {
+      hitLimit = true;
+      return { status: 429, body: { retryAt: clock + 120_000 } };
+    }
+    return {
+      status: 200,
+      fetchedAt: clock,
+      body: { data: { userId: id, displayName: "Owner", collections: { own: ["wanted-lock"] } } },
+    };
+  },
+  fetchScheduler: async (url, init) => {
+    assert(await schedulerAuthorized(new Request(url, init), wakeSecret));
+    await liveScheduler.wake();
+    return new Response(null, { status: 202 });
+  },
+});
+const integrationId = randomUUID();
+const integrationIds = ids.slice(0, 9);
+const integrationPost = await integrationQueue.fetch(
+  new Request(origin + "/api/owner-scans", {
+    method: "POST",
+    body: JSON.stringify({ id: integrationId, ids: integrationIds, force: true }),
+  }),
+  integrationEnv,
+);
+assert.equal(integrationPost.status, 202);
+assert.equal(alarmAt, clock + 1_000);
+clock = alarmAt;
+alarmAt = null;
+await liveScheduler.run();
+let integrationJob = await (await integrationBucket.get(`jobs/${integrationId}`)).json();
+assert.equal(integrationJob.state, "cooldown");
+assert.equal(alarmAt, clock + 120_000, "The scheduler waits for the upstream cooldown");
+const beforeResume = reads;
+clock = alarmAt;
+alarmAt = null;
+await liveScheduler.run();
+integrationJob = await (await integrationBucket.get(`jobs/${integrationId}`)).json();
+assert.equal(integrationJob.state, "complete");
+assert.equal(integrationJob.done.length, integrationIds.length);
+assert.equal(alarmAt, null, "The coordinator goes idle after the queue completes");
+assert(reads > beforeResume, "The scheduler resumed without another browser request");
+assert.equal((await integrationBucket.list({ prefix: "pending/", limit: 100 })).objects.length, 0);
+console.log(
+  "PASS: a closed-browser scan wakes, respects a real cooldown, and resumes to completion.",
+);
