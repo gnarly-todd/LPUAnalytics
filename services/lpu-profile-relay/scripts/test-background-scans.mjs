@@ -424,4 +424,18 @@ assert.deepEqual(excludeReads.slice(originalReadCount), [legacyOwner, replacemen
 assert.equal(submittedIds.length, 2, "The resumed job automatically fills the excluded account's place");
 assert.deepEqual(Array.from(submittedIds[1]), [replacementOwner]);
 assert.equal(client(resumeApi).readCloudScan(resumeProfile), null);
+const forceLegacyId = randomUUID();
+const forceOwner = "forced-valid-owner-000001";
+const forceReplacement = "forced-valid-owner-000002";
+for (const ownerId of [forceOwner, forceReplacement]) snapshots.set(ownerId, { id: ownerId, name: "Old cached owner", own: [], fetchedAt: now - 1000 });
+await excludeBucket.put(`jobs/${forceLegacyId}`, JSON.stringify({ id: forceLegacyId, ids: [forceOwner, excludedOwner], force: true, state: "running", done: [], errors: { [excludedOwner]: "This public profile could not be loaded." }, attempts: { [excludedOwner]: 1 }, fresh: 0, cached: 0, retryAt: 0, createdAt: now, updatedAt: now }));
+await excludeBucket.put(`pending/${forceLegacyId}`, JSON.stringify({ createdAt: now }));
+const forceProfile = "profile-resuming-forced-exclusion";
+browser.localStorage.setItem(`lpu-cloud-scan-v1-${forceProfile}`, JSON.stringify({ id: forceLegacyId, ids: [forceOwner, excludedOwner], force: true, count: 2, createdAt: Date.now() }));
+let forceProgress;
+await client(resumeApi).loadCloudOwnerSnapshots(forceProfile, [{ id: forceOwner }, { id: forceReplacement }], { signal: new AbortController().signal, onProgress: p => { forceProgress = p; } });
+assert.equal(forceProgress.total, 2);
+assert.equal(forceProgress.processed, 2);
+assert.equal(forceProgress.fresh, 2);
+assert.equal(forceProgress.cached, 0, "A refreshed replacement is not also counted as cached");
 console.log("PASS: unavailable owner excluded from new, cached, and resumed scan counts without excluding the working namesake.");

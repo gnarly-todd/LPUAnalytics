@@ -302,7 +302,11 @@ export async function loadCloudOwnerSnapshots(
             ? 0
             : candidates.filter((candidate) => !jobIds.has(candidate.id) && snapshots.has(candidate.id)).length;
           const previousProcessed = Math.min(candidates.length, alreadyCached + status.processed);
-          const previousCached = Math.max(0, snapshots.size - status.fresh);
+          const remainingIds = new Set(remaining.map((candidate) => candidate.id));
+          const previousSnapshots = candidates.filter(
+            (candidate) => !remainingIds.has(candidate.id) && snapshots.has(candidate.id),
+          ).length;
+          const previousCached = Math.max(0, previousSnapshots - status.fresh);
           await loadCloudOwnerSnapshots(profileId, remaining, {
             force: job.force,
             signal,
