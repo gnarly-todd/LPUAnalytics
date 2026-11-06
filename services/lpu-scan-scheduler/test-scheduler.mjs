@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import schedulerWorker, { authorized, createScheduler } from "./worker/index.js";
+import { schedulerWorker, authorized, createScheduler } from "./worker/core.mjs";
 
 const wakeSecret = "wake-" + "a".repeat(40);
 const tickSecret = "tick-" + "b".repeat(40);
@@ -89,16 +89,14 @@ assert.equal(values.has("failures"), false, "A successful check clears retry bac
 let wakes = 0,
   scheduledPromise;
 const binding = {
-  idFromName: (name) => {
+  getByName: (name) => {
     assert.equal(name, "global");
-    return name;
+    return {
+      async wake() {
+        wakes++;
+      },
+    };
   },
-  get: () => ({
-    async fetch() {
-      wakes++;
-      return Response.json({ state: "scheduled" }, { status: 202 });
-    },
-  }),
 };
 const env = { SCAN_WAKE_SECRET: wakeSecret, SCAN_SCHEDULER: binding };
 assert.equal((await schedulerWorker.fetch(request("bad"), env)).status, 403);

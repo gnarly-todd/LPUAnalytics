@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createScanQueue, verifyScanRunner, verifySchedulerSecret } from "../worker/index.js";
-import { authorized as schedulerAuthorized, createScheduler } from "../../lpu-scan-scheduler/worker/index.js";
+import { authorized as schedulerAuthorized, createScheduler } from "../../lpu-scan-scheduler/worker/core.mjs";
 import { randomUUID, webcrypto } from "node:crypto";
 import fs from "node:fs";
 import vm from "node:vm";
