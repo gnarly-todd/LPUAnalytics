@@ -115,7 +115,20 @@ function environment(hooks) {
       if (id === "react" && hooks) return hooks;
       if (id === "./community-insights")
         return {
-          useCommunityInsights: () => ({ data: { demand: {}, statsUpdatedAt: "2026-10-16" } }),
+          useCommunityInsights: () => ({
+            data: {
+              demand: {},
+              statsUpdatedAt: "2026-10-16",
+              catalog: [
+                {
+                  id: "wanted-lock",
+                  mechanisms: ["Pin-tumbler"],
+                  features: ["False gates", "High pin count"],
+                },
+                { id: "lock-1", mechanisms: ["Dimple"], features: [] },
+              ],
+            },
+          }),
         };
       if (!id.startsWith(".")) return require(id);
       const base = path.resolve(path.dirname(file), id);
@@ -418,7 +431,7 @@ async function componentChecks() {
       status: "Wishlist",
       belt: "Blue",
       picked: false,
-      mechanisms: [],
+      mechanisms: n === 0 ? ["Pin-tumbler", "Slider"] : [],
     })),
   };
   let profileLoading = false;
@@ -476,6 +489,22 @@ async function componentChecks() {
   const topMatchesHtml = renderToStaticMarkup(topMatches);
   assert(topMatchesHtml.includes("Owners with the most wishlist matches"));
   assert(topMatchesHtml.includes("65 matches") && topMatchesHtml.includes("View matching locks"));
+  const cardWithCatalogMechanism = nodes(tree).find(
+    (node) => node.props?.className === "wishlist-mobile-card" && text(node).includes("Lock 001"),
+  );
+  const cardWithoutCatalogEntry = nodes(tree).find(
+    (node) => node.props?.className === "wishlist-mobile-card" && text(node).includes("Lock 002"),
+  );
+  const catalogFallbackHtml = renderToStaticMarkup(cardWithCatalogMechanism);
+  assert(
+    catalogFallbackHtml.includes("Dimple"),
+    "Use catalog mechanisms when the profile has none",
+  );
+  assert(catalogFallbackHtml.includes("Not listed"), "Missing features have a clear label");
+  assert(
+    renderToStaticMarkup(cardWithoutCatalogEntry).includes("Not listed"),
+    "Locks absent from the catalog still render without invented details",
+  );
   assert.equal(
     (topMatchesHtml.match(/<details>/g) ?? []).length,
     5,
@@ -524,6 +553,16 @@ async function componentChecks() {
   tree = render();
   html = renderToStaticMarkup(tree);
   assert.equal((html.match(/class="wishlist-mobile-card"/g) ?? []).length, 1);
+  const cardHtml = renderToStaticMarkup(
+    nodes(tree).find((node) => node.props?.className === "wishlist-mobile-card"),
+  );
+  const desktopHtml = renderToStaticMarkup(nodes(tree).find((node) => node.type === "tbody"));
+  for (const result of [cardHtml, desktopHtml]) {
+    assert(result.includes("Pin-tumbler · Slider"));
+    assert(result.includes("False gates · High pin count"));
+    assert(result.indexOf("wishlist-rank-label") < result.indexOf("wishlist-lock-details"));
+    assert(result.indexOf("wishlist-lock-details") < result.indexOf("wishlist-photo"));
+  }
   assert(html.includes("Excel exports all 230"));
   assert.equal(env.calls, calls);
   await button("Export Excel").props.onClick();

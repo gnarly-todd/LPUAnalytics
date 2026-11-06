@@ -11,6 +11,7 @@ import { WishlistLockPhoto } from "./wishlist-lock-photo";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { beltColors, type LockRecord } from "./data";
 import { useCommunityInsights } from "./community-insights";
+import type { CatalogInsight } from "./insights-model";
 import {
   ActivityStatus,
   DataTimestamp,
@@ -280,6 +281,10 @@ export default function WishlistOwnerTable({
   const matches = useMemo(
     () => matchWishlistOwners(activeProfile, owners),
     [activeProfile, owners],
+  );
+  const catalogById = useMemo(
+    () => new Map(insightData.catalog.map((entry) => [entry.id, entry])),
+    [insightData.catalog],
   );
   const rows = useMemo(
     () => sortWishlistRows(matches, sort, insightData.demand),
@@ -881,6 +886,7 @@ export default function WishlistOwnerTable({
                           </div>
                           {lock.version && <p className="wishlist-lock-version">{lock.version}</p>}
                           <WishlistRank lock={lock} />
+                          <WishlistLockDetails lock={lock} entry={catalogById.get(lock.id)} />
                           <WishlistLockPhoto lock={lock} />
                           <dl className="wishlist-mobile-stats">
                             <div>
@@ -978,6 +984,7 @@ export default function WishlistOwnerTable({
                             </th>
                             <td>
                               <WishlistRank lock={lock} />
+                              <WishlistLockDetails lock={lock} entry={catalogById.get(lock.id)} />
                               <WishlistLockPhoto lock={lock} />
                             </td>
                             <td className="wishlist-numeric">
@@ -1063,6 +1070,23 @@ function WishlistRank({ lock }: { lock: LockRecord }) {
       <i style={{ background: beltColors[lock.belt] }} aria-hidden="true" />
       {lock.beltLevel ?? lock.belt}
     </span>
+  );
+}
+
+function WishlistLockDetails({ lock, entry }: { lock: LockRecord; entry?: CatalogInsight }) {
+  const mechanisms = lock.mechanisms.length ? lock.mechanisms : (entry?.mechanisms ?? []);
+  const features = entry?.features ?? [];
+  return (
+    <dl className="wishlist-lock-details">
+      <div>
+        <dt>Mechanisms</dt>
+        <dd>{mechanisms.join(" · ") || "Not listed"}</dd>
+      </div>
+      <div>
+        <dt>Features</dt>
+        <dd>{features.join(" · ") || "Not listed"}</dd>
+      </div>
+    </dl>
   );
 }
 
