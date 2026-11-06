@@ -218,9 +218,13 @@ function scopeChecks() {
 async function queueChecks() {
   const env = environment();
   const api = env.load("app/top-owner-profiles.ts");
+  const unavailable = { id: "cLfKbWZnfGVAqIb18AoR7cjtr323", name: "Fantasm", url: "https://lpubelts.com", ownedCount: 1100 };
+  const namesake = { id: "o5JnzTy5Y0S5gEmRQ4XCFXqoCU83", name: "Fantasm", url: "https://lpubelts.com", ownedCount: 1099 };
   assert.equal(api.TOP_OWNER_LIMIT, 50);
   const ranked = api.selectTopOwners({
     data: [
+      { id: unavailable.id, displayName: unavailable.name, own: unavailable.ownedCount },
+      { id: namesake.id, displayName: namesake.name, own: namesake.ownedCount },
       ...[...profiles, reserveProfile]
         .reverse()
         .map((p) => ({ id: p.id, displayName: p.name, own: p.ownedCount })),
@@ -230,8 +234,16 @@ async function queueChecks() {
   });
   assert.deepEqual(
     Array.from(ranked.profiles, (p) => p.id),
-    [...profiles, reserveProfile].map((p) => p.id).concat("outside-top-fifty-profile"),
+    [namesake.id, ...[...profiles, reserveProfile].map((p) => p.id), "outside-top-fifty-profile"],
   );
+  assert(!ranked.profiles.some(p => p.id === unavailable.id));
+  assert(ranked.profiles.some(p => p.id === namesake.id), "The working profile with the same name remains eligible");
+  const filtered = api.selectOwnerCandidates([unavailable, ...profiles, reserveProfile], "other-profile", 50);
+  assert.equal(filtered.length, 50, "The next ranked profile fills the excluded account's place");
+  assert(!filtered.some(p => p.id === unavailable.id));
+  env.window.localStorage.setItem("lpu-owner-directory-v4", JSON.stringify({ profiles: [unavailable, namesake], updatedAt: "2026-10-16", fetchedAt: Date.now() }));
+  assert.deepEqual(Array.from(api.readOwnerDirectory().profiles, p => p.id), [namesake.id], "Previously cached directories also drop only the unavailable account");
+  env.window.localStorage.removeItem("lpu-owner-directory-v4");
   for (const activeId of [
     profiles[0].id,
     profiles[49].id,
@@ -244,7 +256,7 @@ async function queueChecks() {
     assert.equal(new Set(candidates.map((p) => p.id)).size, 50);
     assert.deepEqual(
       Array.from(candidates, (p) => p.id),
-      [...profiles, reserveProfile]
+      [namesake, ...profiles, reserveProfile]
         .filter((p) => p.id !== activeId)
         .slice(0, 50)
         .map((p) => p.id),
@@ -268,6 +280,12 @@ async function queueChecks() {
   assert.equal(api.readOwnerDirectory().profiles.length, 51, "Cache retains the reserve profile");
   await api.fetchTopOwners();
   assert.equal(env.directoryCalls, 1, "New Top 50 directory is cached");
+  const excludedEnv = environment();
+  const excludedResult = await excludedEnv.load("app/top-owner-profiles.ts").loadOwnerSnapshots([unavailable, namesake]);
+  assert.equal(excludedResult.total, 1);
+  assert.equal(excludedResult.processed, 1);
+  assert.equal(excludedEnv.calls, 1);
+  assert(!excludedEnv.requests.includes(unavailable.id), "The unavailable account is never fetched");
   const updates = [];
   let result = await api.loadOwnerSnapshots([...profiles, profiles[0]], {
     onProgress: (value) => updates.push(value),

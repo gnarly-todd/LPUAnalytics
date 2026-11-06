@@ -9,6 +9,10 @@ export type TopOwner = { id: string; name: string; url: string; ownedCount: numb
 export type TopOwnerDirectory = { profiles: TopOwner[]; updatedAt: string; fetchedAt?: number };
 export type OwnerSnapshot = { id: string; name: string; own: string[]; fetchedAt: number };
 export const OWNER_SCAN_CONCURRENCY = 3;
+// This directory entry no longer has a public profile. Another profile shares
+// the same display name, so exclude the unavailable account by ID only.
+const UNAVAILABLE_OWNER_ID = "cLfKbWZnfGVAqIb18AoR7cjtr323";
+export const isExcludedOwner = (id: string): boolean => id === UNAVAILABLE_OWNER_ID;
 export type ServerScanProgress = {
   total: number;
   processed: number;
@@ -44,7 +48,7 @@ export function selectTopOwners(value: unknown): TopOwnerDirectory {
       counts.set(item.id, Math.max(counts.get(item.id) ?? 0, item.own));
   }
   const profiles = named
-    .filter((p) => counts.has(p.id))
+    .filter((p) => counts.has(p.id) && !isExcludedOwner(p.id))
     .map((p) => ({
       id: p.id,
       name: p.displayName,
@@ -61,7 +65,9 @@ export function selectOwnerCandidates(
   activeProfileId: string,
   count = TOP_OWNER_LIMIT,
 ): TopOwner[] {
-  return profiles.filter((profile) => profile.id !== activeProfileId).slice(0, count);
+  return profiles
+    .filter((profile) => profile.id !== activeProfileId && !isExcludedOwner(profile.id))
+    .slice(0, count);
 }
 
 const OWNER_SCOPE_KEY = "lpu-owner-scope-v2";
@@ -151,7 +157,7 @@ export function readOwnerDirectory(): TopOwnerDirectory | null {
       )
         continue;
       return {
-        profiles: value.profiles,
+        profiles: value.profiles.filter((profile: TopOwner) => !isExcludedOwner(profile.id)),
         updatedAt: value.updatedAt,
         ...(Number.isFinite(value.fetchedAt) ? { fetchedAt: value.fetchedAt } : {}),
       };
@@ -331,7 +337,9 @@ export async function loadOwnerSnapshots(
     onProgress?: (progress: OwnerScanProgress) => void;
   } = {},
 ): Promise<OwnerScanProgress> {
-  const candidates = [...new Map(profiles.map((profile) => [profile.id, profile])).values()];
+  const candidates = [
+    ...new Map(profiles.filter((profile) => !isExcludedOwner(profile.id)).map((profile) => [profile.id, profile])).values(),
+  ];
   await hydrateOwnerCache(candidates);
   signal?.throwIfAborted();
   const snapshots = new Map<string, OwnerSnapshot>();

@@ -1,5 +1,6 @@
 import {
   hydrateOwnerCache,
+  isExcludedOwner,
   readOwnerCache,
   writeOwnerCache,
   type OwnerSnapshot,
@@ -134,6 +135,7 @@ export async function loadCloudOwnerSnapshots(
     onProgress,
   }: { force?: boolean; signal: AbortSignal; onProgress: (progress: OwnerScanProgress) => void },
 ): Promise<void> {
+  candidates = candidates.filter((candidate) => !isExcludedOwner(candidate.id));
   await hydrateOwnerCache(candidates);
   signal.throwIfAborted();
   const snapshots = new Map<string, OwnerSnapshot>();
@@ -157,20 +159,27 @@ export async function loadCloudOwnerSnapshots(
     runnerLastSeenAt?: number;
   }) => {
     if (signal.aborted) return;
+    const errors = Object.fromEntries(
+      Object.entries(progress?.errors || {}).filter(([id]) => !isExcludedOwner(id)),
+    );
+    const queuedIds = new Set(job?.ids || []);
+    const cachedOutsideJob = job?.force
+      ? 0
+      : candidates.filter((candidate) => !queuedIds.has(candidate.id) && snapshots.has(candidate.id)).length;
     onProgress({
       snapshots: candidates.flatMap((p) => (snapshots.has(p.id) ? [snapshots.get(p.id)!] : [])),
       total: candidates.length,
       processed: progress
         ? Math.min(
             candidates.length,
-            (job?.force ? 0 : candidates.length - job!.ids.length) + progress.processed,
+            cachedOutsideJob + progress.processed,
           )
         : force
           ? 0
           : initialCached,
       cached: progress ? Math.max(0, snapshots.size - progress.fresh) : initialCached,
       fresh: progress?.fresh || 0,
-      errors: progress?.errors || {},
+      errors,
       ...(progress && progress.retryAt > Date.now()
         ? { rateLimit: new LpuRateLimitError(progress.retryAt) }
         : {}),
@@ -182,7 +191,7 @@ export async function loadCloudOwnerSnapshots(
               processed: progress.processed,
               fresh: progress.fresh,
               cached: progress.cached,
-              failed: Object.keys(progress.errors).length,
+              failed: Object.keys(errors).length,
               updatedAt: progress.updatedAt!,
               checkedAt: progress.receivedAt ?? Date.now(),
               runnerLastSeenAt: progress.runnerLastSeenAt || 0,
@@ -261,6 +270,7 @@ export async function loadCloudOwnerSnapshots(
     )
       throw new Error("Background scan returned invalid progress.");
     for (const snapshot of status.snapshots as OwnerSnapshot[]) {
+      if (isExcludedOwner(snapshot.id)) continue;
       if (
         !jobIds.has(snapshot.id) ||
         !Array.isArray(snapshot.own) ||
@@ -278,6 +288,53 @@ export async function loadCloudOwnerSnapshots(
     if (status.hasMore) continue;
     if (["complete", "cancelled"].includes(status.state)) {
       clearScan(profileId);
+      // A restored job can have an older candidate list. Fill any newly
+      // eligible places without restarting the work it already completed.
+      if (status.state === "complete") {
+        const remaining = candidates.filter(
+          (candidate) => !jobIds.has(candidate.id) && (job!.force || !snapshots.has(candidate.id)),
+        );
+        if (remaining.length) {
+          const previousErrors = Object.fromEntries(
+            Object.entries(status.errors).filter(([id]) => !isExcludedOwner(id)),
+          );
+          const alreadyCached = job.force
+            ? 0
+            : candidates.filter((candidate) => !jobIds.has(candidate.id) && snapshots.has(candidate.id)).length;
+          const previousProcessed = Math.min(candidates.length, alreadyCached + status.processed);
+          const previousCached = Math.max(0, snapshots.size - status.fresh);
+          await loadCloudOwnerSnapshots(profileId, remaining, {
+            force: job.force,
+            signal,
+            onProgress: (next) => {
+              for (const snapshot of next.snapshots) snapshots.set(snapshot.id, snapshot);
+              onProgress({
+                ...next,
+                snapshots: candidates.flatMap((candidate) =>
+                  snapshots.has(candidate.id) ? [snapshots.get(candidate.id)!] : [],
+                ),
+                total: candidates.length,
+                processed: Math.min(candidates.length, previousProcessed + next.processed),
+                cached: previousCached + next.cached,
+                fresh: status.fresh + next.fresh,
+                errors: { ...previousErrors, ...next.errors },
+                ...(next.serverProgress
+                  ? {
+                      serverProgress: {
+                        ...next.serverProgress,
+                        total: status.total + next.serverProgress.total,
+                        processed: status.processed + next.serverProgress.processed,
+                        cached: status.cached + next.serverProgress.cached,
+                        fresh: status.fresh + next.serverProgress.fresh,
+                        failed: Object.keys(previousErrors).length + next.serverProgress.failed,
+                      },
+                    }
+                  : {}),
+              });
+            },
+          });
+        }
+      }
       return;
     }
     await waitForUpdate(signal);

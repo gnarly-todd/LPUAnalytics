@@ -96,6 +96,10 @@ export function createRelay({ fetchUpstream = fetch, now = Date.now, sleep = (ms
 // Durable scans: only an authenticated background runner can advance the queue.
 const SCAN_ORIGIN = "https://todd-lpu-profile-relay.nicelife70117.chatgpt.site";
 const SCAN_TTL = 7 * 86400_000;
+// The leaderboard still lists this account, but its public profile is gone.
+// Match by ID: another, working account has the same display name.
+const UNAVAILABLE_OWNER_ID = "cLfKbWZnfGVAqIb18AoR7cjtr323";
+const isScannableOwner = id => id !== UNAVAILABLE_OWNER_ID;
 const validId = value => typeof value === "string" && /^[A-Za-z0-9_-]{20,128}$/.test(value);
 const validJob = value => typeof value === "string" && /^[a-f0-9-]{36}$/.test(value);
 const decode64 = value => Uint8Array.from(atob(value.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
@@ -145,6 +149,25 @@ async function authorizeScanRunner(request, env) {
   return verifyScanRunner(request);
 }
 
+function eligibleScanJob(job) {
+  if (!job.ids.includes(UNAVAILABLE_OWNER_ID) && !job.done.includes(UNAVAILABLE_OWNER_ID) && !job.errors[UNAVAILABLE_OWNER_ID]) return job;
+  const ids = job.ids.filter(isScannableOwner);
+  const done = job.done.filter(isScannableOwner);
+  const errors = { ...job.errors };
+  const attempts = { ...job.attempts };
+  delete errors[UNAVAILABLE_OWNER_ID];
+  delete attempts[UNAVAILABLE_OWNER_ID];
+  const removedDone = job.done.length - done.length;
+  // Older jobs do not record each owner's cache/fresh source. If this now
+  // unavailable owner was saved, it most likely came from an earlier cache.
+  const removedCached = Math.min(job.cached, removedDone);
+  const cached = job.cached - removedCached;
+  const fresh = Math.max(0, job.fresh - (removedDone - removedCached));
+  const completed = new Set(done);
+  const complete = ids.every(id => completed.has(id) || errors[id]);
+  return { ...job, ids, done, errors, attempts, fresh, cached, ...(complete && job.state !== "cancelled" ? { state: "complete", retryAt: 0 } : {}) };
+}
+
 export function createScanQueue({ readProfile, now = Date.now, authorize = authorizeScanRunner, fetchScheduler = fetch } = {}) {
   const read = async (bucket, key) => { const object = await bucket.get(key); return object ? object.json() : null; };
   const put = (bucket, key, value, options = {}) => bucket.put(key, JSON.stringify(value), { httpMetadata: { contentType: "application/json" }, ...options });
@@ -191,12 +214,13 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = autho
       let processed = 0, fetched = 0, cacheHits = 0, probedUpstream = false;
       for (const entry of list.objects.sort((a, b) => new Date(a.uploaded).getTime() - new Date(b.uploaded).getTime())) {
         const id = entry.key.slice(8);
-        const job = await read(bucket, `jobs/${id}`);
-        if (!job || job.createdAt < now() - SCAN_TTL || await bucket.head(`cancelled/${id}`)) {
+        const storedJob = await read(bucket, `jobs/${id}`);
+        if (!storedJob || storedJob.createdAt < now() - SCAN_TTL || await bucket.head(`cancelled/${id}`)) {
           await bucket.delete(entry.key);
-          if (job && job.createdAt < now() - SCAN_TTL) await bucket.delete(`jobs/${id}`);
+          if (storedJob && storedJob.createdAt < now() - SCAN_TTL) await bucket.delete(`jobs/${id}`);
           continue;
         }
+        const job = eligibleScanJob(storedJob);
         const done = new Set(job.done);
         const pending = job.ids.filter(id => !done.has(id) && !job.errors[id]);
         job.state = "running";
@@ -306,8 +330,9 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = autho
         if (text.length > 2_000_000) return reply({ message: "Scan request is too large." }, 413);
         let body; try { body = JSON.parse(text); } catch { return reply({ message: "Invalid scan request." }, 400); }
         if (!validJob(body.id) || !Array.isArray(body.ids) || !body.ids.length || !body.ids.every(validId) || typeof body.force !== "boolean") return reply({ message: "Valid public profile IDs are required." }, 400);
-        const existing = await read(bucket, `jobs/${body.id}`);
-        if (existing) {
+        const storedJob = await read(bucket, `jobs/${body.id}`);
+        if (storedJob) {
+          const existing = eligibleScanJob(storedJob);
           if (await bucket.head(`cancelled/${body.id}`)) return reply({ id: body.id, state: "cancelled" }, 200);
           if (!["complete", "cancelled"].includes(existing.state)) {
             // Recover a submission interrupted between writing the job and queue entry.
@@ -317,8 +342,10 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = autho
           }
           return reply({ id: body.id, state: existing.state }, 200);
         }
-        const job = { id: body.id, ids: [...new Set(body.ids)], force: body.force, state: "queued", done: [], errors: {}, attempts: {}, fresh: 0, cached: 0, retryAt: 0, createdAt: now(), updatedAt: now() };
+        const eligibleIds = [...new Set(body.ids)].filter(isScannableOwner);
+        const job = { id: body.id, ids: eligibleIds, force: body.force, state: eligibleIds.length ? "queued" : "complete", done: [], errors: {}, attempts: {}, fresh: 0, cached: 0, retryAt: 0, createdAt: now(), updatedAt: now() };
         await put(bucket, `jobs/${body.id}`, job);
+        if (!eligibleIds.length) return reply({ id: body.id, state: "complete" }, 202);
         // The runner reads pending entries independently of browser sessions.
         await put(bucket, `pending/${body.id}`, { createdAt: job.createdAt });
         try { await wakeScheduler(env); }
@@ -330,8 +357,9 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = autho
       const match = url.pathname.match(/^\/api\/owner-scans\/([a-f0-9-]{36})$/);
       if (!match) return reply({ message: "Not found." }, 404);
       const id = match[1];
-      const job = await read(bucket, `jobs/${id}`);
-      if (!job || job.createdAt < now() - SCAN_TTL) return reply({ message: "This background scan has expired." }, 404);
+      const storedJob = await read(bucket, `jobs/${id}`);
+      if (!storedJob || storedJob.createdAt < now() - SCAN_TTL) return reply({ message: "This background scan has expired." }, 404);
+      const job = eligibleScanJob(storedJob);
       if (url.searchParams.get("action") === "advance" && request.method === "POST") {
         if (!ctx?.waitUntil) return reply({ message: "Background execution is unavailable." }, 503);
         ctx.waitUntil(tick(bucket, { jobId: id, maxProfiles: 3 }).catch(error => console.error("Scan batch failed", error.message)));
@@ -345,12 +373,15 @@ export function createScanQueue({ readProfile, now = Date.now, authorize = autho
       if (request.method !== "GET") return reply({ message: "Method not allowed." }, 405);
       const cursor = Math.max(0, Number(url.searchParams.get("cursor")) || 0);
       if (!Number.isSafeInteger(cursor)) return reply({ message: "Invalid cursor." }, 400);
-      const page = job.done.slice(cursor, cursor + 25);
+      // Keep cursors based on the original page positions for clients already
+      // paging through a job created before the exclusion was introduced.
+      const rawPage = storedJob.done.slice(cursor, cursor + 25);
+      const page = rawPage.filter(isScannableOwner);
       const snapshots = (await Promise.all(page.map(ownerId => read(bucket, `owners/${ownerId}`)))).filter(Boolean);
       const cancelled = await bucket.head(`cancelled/${id}`);
       const cooldown = await read(bucket, "state/scan-cooldown");
       const runner = await read(bucket, "state/scan-runner");
-      return reply({ runnerLastSeenAt: runner?.checkedAt || 0, id, state: cancelled ? "cancelled" : (cooldown?.retryAt > now() && !["complete", "cancelled"].includes(job.state) ? "cooldown" : job.state), total: job.ids.length, processed: job.done.length + Object.keys(job.errors).length, fresh: job.fresh, cached: job.cached, errors: job.errors, retryAt: Math.max(job.retryAt || 0, cooldown?.retryAt || 0), updatedAt: job.updatedAt, snapshots, nextCursor: cursor + page.length, hasMore: cursor + page.length < job.done.length });
+      return reply({ runnerLastSeenAt: runner?.checkedAt || 0, id, state: cancelled ? "cancelled" : (cooldown?.retryAt > now() && !["complete", "cancelled"].includes(job.state) ? "cooldown" : job.state), total: job.ids.length, processed: job.done.length + Object.keys(job.errors).length, fresh: job.fresh, cached: job.cached, errors: job.errors, retryAt: Math.max(job.retryAt || 0, cooldown?.retryAt || 0), updatedAt: job.updatedAt, snapshots, nextCursor: cursor + rawPage.length, hasMore: cursor + rawPage.length < storedJob.done.length });
     },
   };
 }

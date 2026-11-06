@@ -38,15 +38,15 @@ const snapshots = new Map();
 const storage = () => { const values = new Map(); return { getItem: k => values.get(k) || null, setItem: (k,v) => values.set(k,v), removeItem: k => values.delete(k) }; };
 const browser = { location: { hostname: "gnarly-todd.github.io" }, localStorage: storage(), sessionStorage: storage(), setTimeout, clearTimeout, addEventListener() {}, removeEventListener() {} };
 class RateError extends Error { constructor(retryAt) { super("cooldown"); this.retryAt = retryAt; } }
-function client() {
+function client(requestApi = api) {
   const module = { exports: {} };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync("app/cloud-owner-scans.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
     module, exports: module.exports, window: browser, document: { addEventListener() {}, removeEventListener() {} },
     crypto: webcrypto, AbortSignal, Date, Map, fetch: (url, init) => {
       if (failNextPoll && url.includes("cursor=")) { failNextPoll = false; return Promise.reject(new Error("Connection discarded during lock")); }
-      return api(url.replace(origin, ""), init);
+      return requestApi(url.replace(origin, ""), init);
     },
-    require: name => name === "./lpu-request" ? { LpuRateLimitError: RateError } : { hydrateOwnerCache: async () => {}, readOwnerCache: id => snapshots.get(id), writeOwnerCache: async snapshot => snapshots.set(snapshot.id, snapshot) },
+    require: name => name === "./lpu-request" ? { LpuRateLimitError: RateError } : { isExcludedOwner: id => id === "cLfKbWZnfGVAqIb18AoR7cjtr323", hydrateOwnerCache: async () => {}, readOwnerCache: id => snapshots.get(id), writeOwnerCache: async snapshot => snapshots.set(snapshot.id, snapshot) },
   });
   return module.exports;
 }
@@ -354,3 +354,74 @@ assert.equal(probeCalls, 1, "Only one request is rejected when starting with an 
 assert.equal(probeResult.pauseReason, "rate-limit");
 assert.equal(probeResult.pending, 1);
 console.log("PASS: proactive quota pauses avoid repeated upstream penalties and resume safely.");
+
+// The unavailable account is omitted by ID, including in saved jobs created
+// before this exclusion. A valid account with the same display name remains.
+const excludedOwner = "cLfKbWZnfGVAqIb18AoR7cjtr323";
+const namesakeOwner = "o5JnzTy5Y0S5gEmRQ4XCFXqoCU83";
+const excludeBucket = new Bucket();
+const excludeReads = [];
+const excludeQueue = createScanQueue({ now: () => now, authorize: async () => true, readProfile: async ownerId => {
+  excludeReads.push(ownerId);
+  return { status: 200, fetchedAt: now, body: { data: { userId: ownerId, displayName: "Fantasm", collections: { own: [] } } } };
+} });
+const excludeEnv = { BUCKET: excludeBucket };
+const excludeApi = (path, init) => excludeQueue.fetch(new Request(origin + path, init), excludeEnv);
+const onlyExcludedId = randomUUID();
+assert.equal((await excludeApi("/api/owner-scans", { method: "POST", body: JSON.stringify({ id: onlyExcludedId, ids: [excludedOwner], force: false }) })).status, 202);
+let excludedStatus = await (await excludeApi(`/api/owner-scans/${onlyExcludedId}`)).json();
+assert.equal(excludedStatus.state, "complete");
+assert.equal(excludedStatus.total, 0);
+assert.equal(excludedStatus.processed, 0);
+assert.equal((await excludeBucket.list({ prefix: "pending/", limit: 100 })).objects.length, 0);
+const mixedId = randomUUID();
+await excludeApi("/api/owner-scans", { method: "POST", body: JSON.stringify({ id: mixedId, ids: [excludedOwner, namesakeOwner], force: false }) });
+await excludeApi("/api/owner-scans/tick", { method: "POST" });
+excludedStatus = await (await excludeApi(`/api/owner-scans/${mixedId}`)).json();
+assert.equal(excludedStatus.total, 1);
+assert.equal(excludedStatus.processed, 1);
+assert.deepEqual(excludeReads, [namesakeOwner]);
+assert.equal(excludedStatus.snapshots[0].id, namesakeOwner);
+
+const cachedLegacyId = randomUUID();
+await excludeBucket.put(`jobs/${cachedLegacyId}`, JSON.stringify({ id: cachedLegacyId, ids: [excludedOwner, namesakeOwner], force: false, state: "complete", done: [excludedOwner, namesakeOwner], errors: {}, attempts: {}, fresh: 1, cached: 1, retryAt: 0, createdAt: now, updatedAt: now }));
+await excludeBucket.put(`owners/${excludedOwner}`, JSON.stringify({ id: excludedOwner, name: "Fantasm", own: [], fetchedAt: now }));
+excludedStatus = await (await excludeApi(`/api/owner-scans/${cachedLegacyId}`)).json();
+assert.equal(excludedStatus.total, 1);
+assert.equal(excludedStatus.processed, 1);
+assert.equal(excludedStatus.cached, 0);
+assert.equal(excludedStatus.fresh, 1);
+assert.deepEqual(excludedStatus.snapshots.map(snapshot => snapshot.id), [namesakeOwner]);
+assert.equal(excludedStatus.nextCursor, 2, "Legacy pagination keeps its original cursor positions");
+
+const legacyId = randomUUID();
+const legacyOwner = "legacy-valid-owner-000001";
+const replacementOwner = "legacy-valid-owner-000002";
+await excludeBucket.put(`jobs/${legacyId}`, JSON.stringify({ id: legacyId, ids: [legacyOwner, excludedOwner], force: false, state: "running", done: [], errors: { [excludedOwner]: "This public profile could not be loaded." }, attempts: { [excludedOwner]: 1 }, fresh: 0, cached: 0, retryAt: 0, createdAt: now, updatedAt: now }));
+await excludeBucket.put(`pending/${legacyId}`, JSON.stringify({ createdAt: now }));
+excludedStatus = await (await excludeApi(`/api/owner-scans/${legacyId}`)).json();
+assert.equal(excludedStatus.total, 1);
+assert.equal(excludedStatus.processed, 0);
+assert.deepEqual(excludedStatus.errors, {});
+const originalReadCount = excludeReads.length;
+const resumeProfile = "profile-resuming-excluded-owner";
+browser.localStorage.setItem(`lpu-cloud-scan-v1-${resumeProfile}`, JSON.stringify({ id: legacyId, ids: [legacyOwner, excludedOwner], force: false, count: 2, createdAt: Date.now() }));
+const submittedIds = [];
+const resumeApi = async (path, init = {}) => {
+  if (path === "/api/owner-scans" && init.method === "POST") submittedIds.push(JSON.parse(init.body).ids);
+  if (path.includes("?cursor=")) await excludeApi("/api/owner-scans/tick", { method: "POST" });
+  return excludeApi(path, init);
+};
+let resumeProgress;
+await client(resumeApi).loadCloudOwnerSnapshots(resumeProfile, [{ id: legacyOwner }, { id: excludedOwner }, { id: replacementOwner }], { signal: new AbortController().signal, onProgress: p => { resumeProgress = p; } });
+assert.equal(resumeProgress.total, 2);
+assert.equal(resumeProgress.processed, 2);
+assert.equal(resumeProgress.fresh, 2);
+assert.equal(resumeProgress.serverProgress.total, 2);
+assert.equal(resumeProgress.serverProgress.processed, 2);
+assert.deepEqual(Object.keys(resumeProgress.errors), []);
+assert.deepEqual(excludeReads.slice(originalReadCount), [legacyOwner, replacementOwner]);
+assert.equal(submittedIds.length, 2, "The resumed job automatically fills the excluded account's place");
+assert.deepEqual(Array.from(submittedIds[1]), [replacementOwner]);
+assert.equal(client(resumeApi).readCloudScan(resumeProfile), null);
+console.log("PASS: unavailable owner excluded from new, cached, and resumed scan counts without excluding the working namesake.");
