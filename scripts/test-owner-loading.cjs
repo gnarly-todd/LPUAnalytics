@@ -912,6 +912,36 @@ async function componentChecks() {
   tree = render();
   assert.equal(cooldownTimers.size, 0, "Stop cancels cooldown resume");
   assert(!button("Stop loading"));
+
+  // A saved request can be larger than the eligible directory after a profile
+  // is excluded. The label must describe the owners that can actually load.
+  const countProfileId = "count-check-profile-0001";
+  const eligibleProfiles = Array.from({ length: 1926 }, (_, n) => ({
+    id: `count-check-owner-${String(n).padStart(5, "0")}`,
+    name: `Count owner ${n}`,
+    url: "https://lpubelts.com",
+    ownedCount: 2000 - n,
+  }));
+  env.window.localStorage.setItem("lpu-owner-directory-v4", JSON.stringify({
+    profiles: [
+      { id: countProfileId, name: "Selected", url: "https://lpubelts.com", ownedCount: 3000 },
+      { id: "cLfKbWZnfGVAqIb18AoR7cjtr323", name: "Fantasm", url: "https://lpubelts.com", ownedCount: 2900 },
+      ...eligibleProfiles,
+    ],
+    updatedAt: "2026-10-16",
+    fetchedAt: Date.now(),
+  }));
+  ownerApi.writeOwnerScope(countProfileId, 1927);
+  activeProfile = { ...fullWishlist, id: countProfileId };
+  render();
+  tree = render();
+  await wait(10);
+  tree = render();
+  assert(button("Load top 1926 — cache first"), "The load button shows eligible profiles, not the stale saved target");
+  assert(!button("Load top 1927 — cache first"));
+  assert(button("All ranked profiles selected").props.disabled);
+  assert(text(tree).includes("Load top 1926 — cache first reuses valid"));
+  assert.equal(ownerApi.readOwnerScope(countProfileId), 1927, "The saved target remains available if the directory grows");
   for (const effect of effects) effect?.cleanup?.();
   console.log(
     "PASS: custom 450-profile requests, invalid entry, repeated automatic cooldown resume, forced refresh continuation and Stop during cooldown.",

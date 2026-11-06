@@ -109,6 +109,7 @@ export default function WishlistOwnerTable({
     () => selectOwnerCandidates(directory?.profiles ?? [], activeProfile.id, requestedCount),
     [directory, activeProfile.id, requestedCount],
   );
+  const selectedCount = directory ? members.length : requestedCount;
 
   useEffect(() => {
     if (loading || paused) {
@@ -529,7 +530,7 @@ export default function WishlistOwnerTable({
               aria-busy={busy}
             >
               <OwnerActionIcon kind="load" />
-              {busy ? "Loading profiles…" : `Load top ${requestedCount} — cache first`}
+              {busy ? "Loading profiles…" : `Load top ${selectedCount} — cache first`}
             </button>
             {directory && members.length > 0 && (
               <button
@@ -702,7 +703,7 @@ export default function WishlistOwnerTable({
               <dt>Profiles loaded</dt>
               <dd>
                 {owners.length}
-                <span> / {directory ? members.length : requestedCount}</span>
+                <span> / {selectedCount}</span>
               </dd>
               <dd className="wishlist-metric-note">Your own profile is excluded</dd>
             </div>
@@ -1022,14 +1023,14 @@ export default function WishlistOwnerTable({
             <summary>About coverage, data freshness &amp; export</summary>
             <div>
               <p>
-                Matches cover only the top {directory ? members.length : requestedCount} other named
+                Matches cover only the top {selectedCount} other named
                 public leaderboard profiles, not every LPU account. Your profile is excluded before
                 selecting the ranked profiles to check. Ownership does not imply willingness to sell
                 or trade.
               </p>
               <p>
                 Ownership is saved in this browser for up to 7 days. Fetch latest from LPU Belts
-                refreshes the selected range; Load top {requestedCount} — cache first reuses valid
+                refreshes the selected range; Load top {selectedCount} — cache first reuses valid
                 saved results and fetches missing or expired profiles from LPU Belts. Excel exports
                 every wishlist lock and all loaded matches, regardless of filters, including
                 coverage and each owner’s original fetch time.
