@@ -1,12 +1,6 @@
 name: Continue background owner scans
 on:
-  schedule:
-    - cron: "*/5 * * * *"
   workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/owner-scans.yml'
-      - 'scripts/run-owner-scans.mjs'
 permissions:
   contents: read
   id-token: write

@@ -14,10 +14,23 @@ The deployed worker is managed through Sites project `appgprj_6adedc6830888191bc
 
 Both frontends use `/api/owner-scans` to submit idempotent jobs, retrieve paginated snapshots, and cancel a scan. A random scan identifier is retained in browser storage before submission; it is the capability needed to read or stop that scan. Only public LPU ownership data is stored. R2 (`BUCKET`) holds job progress, per-profile seven-day snapshots, cancellation markers, a global cooldown and an atomic runner lease. Expired records are rejected and incrementally cleaned up. A closed or suspended browser does not cancel a job.
 
-`.github/workflows/owner-scans.yml` checks pending work every five minutes, independently of visitors. GitHub schedules can run late. The runner authenticates using a short-lived GitHub OIDC token verified against GitHub's JWKS, pinned to this repository, main branch, exact workflow and relay audience. No permanent credential is stored. The lease prevents overlapping checks; each check processes up to 50 profiles, at most three concurrently, and persists progress every round. LPU Retry-After is stored globally and honored across Worker restarts. Temporary profile errors retry across up to three runner checks, then remain visible as failures. Successful owners are retained.
+The Cloudflare Durable Object scheduler wakes for a new job and continues
+processing it independently of visitors. It schedules the next batch after
+any LPU cooldown; a five-minute Cloudflare Cron Trigger recovers missed wakes.
+The lease prevents overlapping checks. Each check processes up to 50 profiles,
+at most three concurrently, and persists progress every round. Temporary profile
+errors retry across up to three checks, then remain visible as failures.
 
-Keep the workflow enabled in GitHub Actions. GitHub can disable schedules after prolonged public-repository inactivity. Monitor the Continue background owner scans workflow if jobs stop progressing. Tests: `node services/lpu-profile-relay/scripts/test-background-scans.mjs` from the analytics checkout.
+Submission starts a bounded three-profile batch using `ctx.waitUntil`, with
+single-attempt ten-second upstream timeouts. An open page can also request a
+scoped batch through `POST /api/owner-scans/<id>?action=advance`. The global
+lease and persistent cooldown protect all entry points, and the UI shows the
+runner heartbeat. See `../lpu-scan-scheduler/README.md` for configuration,
+verification, and rollback.
 
-### Runner scheduling repair
-
-Submission starts a bounded three-profile batch using `ctx.waitUntil`, with single-attempt ten-second upstream timeouts. The open page can request additional scoped batches through `POST /api/owner-scans/<id>?action=advance`. The global lease and persistent cooldown protect all entry points. The authenticated GitHub runner drains the queue until empty, checks cooldowns once per minute, refreshes OIDC on every request, and hands pending work to a new `workflow_dispatch` before its 150-minute execution budget. The backup cron uses `*/5`, but GitHub scheduled starts remain best effort. The UI shows the runner heartbeat and warns if it has not checked in. Multiple pending scans rotate after each batch to avoid starving later submissions.
+`.github/workflows/owner-scans.yml` remains available as a manual fallback.
+It authenticates with a short-lived GitHub OIDC token pinned to this repository,
+main branch, workflow, and relay audience. Run it manually if the Cloudflare
+scheduler needs to be taken offline. Tests: `node
+services/lpu-profile-relay/scripts/test-background-scans.mjs` from the analytics
+checkout.
