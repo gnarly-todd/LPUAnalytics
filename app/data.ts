@@ -24,7 +24,7 @@ export type LockRecord = {
   };
 };
 
-export const profileSnapshotDate = "November 12, 2026 · 3:40 PM EST";
+export const profileSnapshotDate = "November 13, 2026 · 3:21 PM EST";
 
 export const profileCollectionsSnapshot: Record<string, string[]> = {
   own: [
