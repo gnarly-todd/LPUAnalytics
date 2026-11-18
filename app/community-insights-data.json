@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
-  "fetchedAt": "2026-11-17T21:32:20.779Z",
-  "statsUpdatedAt": "2026-11-17T21:15:06.391Z",
-  "totalProfiles": 5647,
+  "fetchedAt": "2026-11-18T21:08:03.434Z",
+  "statsUpdatedAt": "2026-11-18T20:15:07.000Z",
+  "totalProfiles": 5654,
   "cohorts": {
     "all": {
-      "own": { "users": 4038, "average": 11.863546310054483, "maximum": 857 },
-      "allLists": { "users": 4378, "average": 25.044997715851988, "maximum": 857 },
-      "picked": { "users": 3876, "average": 8.583333333333334, "maximum": 392 },
-      "recordedLocks": { "users": 890, "average": 12.768539325842697, "maximum": 383 },
-      "wishlist": { "users": 962, "average": 9.226611226611226, "maximum": 272 },
+      "own": { "users": 4042, "average": 11.85526966848095, "maximum": 856 },
+      "allLists": { "users": 4383, "average": 25.027378507871322, "maximum": 856 },
+      "picked": { "users": 3880, "average": 8.579639175257732, "maximum": 392 },
+      "recordedLocks": { "users": 891, "average": 12.762065095398428, "maximum": 383 },
+      "wishlist": { "users": 962, "average": 9.23076923076923, "maximum": 272 },
       "projects": { "users": 114, "average": 2.0789473684210527, "maximum": 7 },
-      "awards": { "users": 952, "average": 2.9516806722689077, "maximum": 21 },
+      "awards": { "users": 953, "average": 2.951731374606506, "maximum": 21 },
       "raffleWatchlist": { "users": 148, "average": 6.972972972972973, "maximum": 52 },
       "recorded": { "users": 413, "average": 9.00726392251816, "maximum": 250 },
       "safelocksOwn": { "users": 113, "average": 2.7610619469026547, "maximum": 18 },
@@ -19,12 +19,12 @@
       "safelocksWishlist": { "users": 14, "average": 1.7857142857142858, "maximum": 9 }
     },
     "black": {
-      "own": { "users": 103, "average": 91.60194174757281, "maximum": 857 },
-      "allLists": { "users": 114, "average": 250.53508771929825, "maximum": 857 },
-      "picked": { "users": 104, "average": 74.66346153846153, "maximum": 392 },
+      "own": { "users": 103, "average": 91.60194174757281, "maximum": 856 },
+      "allLists": { "users": 114, "average": 250.60526315789474, "maximum": 856 },
+      "picked": { "users": 104, "average": 74.73076923076923, "maximum": 392 },
       "recorded": { "users": 51, "average": 42.23529411764706, "maximum": 250 },
-      "wishlist": { "users": 50, "average": 29.56, "maximum": 253 },
-      "recordedLocks": { "users": 107, "average": 60.23364485981308, "maximum": 383 },
+      "wishlist": { "users": 49, "average": 30.142857142857142, "maximum": 254 },
+      "recordedLocks": { "users": 107, "average": 60.25233644859813, "maximum": 383 },
       "safelocksOwn": { "users": 40, "average": 3.7, "maximum": 18 },
       "safelocksCracked": { "users": 28, "average": 1.75, "maximum": 5 },
       "projects": { "users": 79, "average": 2.367088607594937, "maximum": 7 },
@@ -113,9 +113,9 @@
     "f6b001ed": 23,
     "779e7dcb": 42,
     "779d74f5": 18,
-    "562e964e": 21,
+    "562e964e": 22,
     "d5053e6d": 20,
-    "2455f0ae": 40,
+    "2455f0ae": 41,
     "759d0d0f": 26,
     "f54c8493": 17,
     "bd9dc1e4": 18,
@@ -153,7 +153,7 @@
     "da8331ef": 11,
     "c266d57b": 21,
     "57fbcb1b": 16,
-    "649eaebc": 26,
+    "649eaebc": 27,
     "2bf16de8": 15,
     "b8350900": 30,
     "ef4e0295": 25,
@@ -237,7 +237,7 @@
     "fe84cc3c": 11,
     "06ddb074": 21,
     "f97700ff": 16,
-    "4071176d": 17,
+    "4071176d": 16,
     "2484ce70": 38,
     "237f29c9": 57,
     "171f76e9": 31,
@@ -282,7 +282,7 @@
     "c4f942f0": 19,
     "b29a8b44": 20,
     "434bdf9d": 11,
-    "f133510b": 32,
+    "f133510b": 33,
     "8cb1a776": 5,
     "5dc117cd": 7,
     "366d5f50": 30,
@@ -310,7 +310,7 @@
     "31431c49": 4,
     "87eaa964": 16,
     "f96de7cc": 17,
-    "8f3f18d8": 13,
+    "8f3f18d8": 12,
     "06353788": 12,
     "f1e92541": 21,
     "f9aceec0": 7,
@@ -578,7 +578,7 @@
     "68b5a797": 7,
     "f7b52501": 5,
     "3ddfc71c": 5,
-    "d54a6b5f": 5,
+    "d54a6b5f": 6,
     "a2bd7f1e": 13,
     "d0c510c5": 3,
     "71c7270b": 5,
@@ -1047,6 +1047,7 @@
     "ca9828d7": 1,
     "8982fac6": 1,
     "265e8045": 1,
+    "4164c937": 1,
     "a2a10bc7": 1,
     "32c85438": 3,
     "0c946064": 2,
@@ -1072,8 +1073,8 @@
       "updatedAt": "2025-12-02T23:39:17.927Z",
       "rankDate": "",
       "documentedPicks": 109,
-      "popularity": 1487,
-      "scorecardCount": 107,
+      "popularity": 1489,
+      "scorecardCount": 108,
       "features": [],
       "flags": []
     },
@@ -1088,7 +1089,7 @@
       "updatedAt": "2025-12-02T23:39:17.927Z",
       "rankDate": "",
       "documentedPicks": 18,
-      "popularity": 149,
+      "popularity": 150,
       "scorecardCount": 18,
       "features": ["Unguttable"],
       "flags": []
@@ -1120,8 +1121,8 @@
       "updatedAt": "2025-12-02T23:39:17.927Z",
       "rankDate": "",
       "documentedPicks": 157,
-      "popularity": 551,
-      "scorecardCount": 122,
+      "popularity": 552,
+      "scorecardCount": 123,
       "features": [],
       "flags": []
     },
@@ -1214,8 +1215,8 @@
       "addedAt": "2023-02-21T23:16:05.000Z",
       "updatedAt": "2025-12-02T23:39:17.928Z",
       "rankDate": "",
-      "documentedPicks": 71,
-      "popularity": 585,
+      "documentedPicks": 72,
+      "popularity": 588,
       "scorecardCount": 69,
       "features": ["Unguttable"],
       "flags": []
@@ -1247,7 +1248,7 @@
       "updatedAt": "2025-12-02T23:39:17.928Z",
       "rankDate": "",
       "documentedPicks": 173,
-      "popularity": 1520,
+      "popularity": 1522,
       "scorecardCount": 173,
       "features": ["Unguttable"],
       "flags": []
@@ -1279,7 +1280,7 @@
       "updatedAt": "2025-12-02T23:39:17.928Z",
       "rankDate": "",
       "documentedPicks": 54,
-      "popularity": 510,
+      "popularity": 512,
       "scorecardCount": 54,
       "features": ["Unguttable"],
       "flags": []
@@ -1310,7 +1311,7 @@
       "addedAt": "2023-02-21T23:16:05.000Z",
       "updatedAt": "2025-12-02T23:39:17.928Z",
       "rankDate": "",
-      "documentedPicks": 13,
+      "documentedPicks": 14,
       "popularity": 191,
       "scorecardCount": 13,
       "features": ["Unguttable"],
@@ -1518,8 +1519,8 @@
       "updatedAt": "2025-12-02T23:39:17.928Z",
       "rankDate": "",
       "documentedPicks": 5,
-      "popularity": 16,
-      "scorecardCount": 4,
+      "popularity": 17,
+      "scorecardCount": 5,
       "features": [],
       "flags": []
     },
@@ -1642,7 +1643,7 @@
       "updatedAt": "2025-12-02T23:39:17.929Z",
       "rankDate": "",
       "documentedPicks": 40,
-      "popularity": 299,
+      "popularity": 300,
       "scorecardCount": 39,
       "features": ["Unguttable"],
       "flags": []
@@ -2210,8 +2211,8 @@
       "updatedAt": "2026-08-07T00:30:27.148Z",
       "rankDate": "",
       "documentedPicks": 257,
-      "popularity": 1896,
-      "scorecardCount": 253,
+      "popularity": 1897,
+      "scorecardCount": 255,
       "features": ["Unguttable"],
       "flags": []
     },
@@ -2226,7 +2227,7 @@
       "updatedAt": "2025-12-02T23:39:17.930Z",
       "rankDate": "",
       "documentedPicks": 17,
-      "popularity": 172,
+      "popularity": 173,
       "scorecardCount": 17,
       "features": [],
       "flags": []
@@ -2258,7 +2259,7 @@
       "updatedAt": "2025-12-02T23:39:17.930Z",
       "rankDate": "",
       "documentedPicks": 59,
-      "popularity": 464,
+      "popularity": 466,
       "scorecardCount": 59,
       "features": ["Unguttable"],
       "flags": []
@@ -2571,9 +2572,9 @@
       "addedAt": "2023-02-21T23:16:05.000Z",
       "updatedAt": "2025-12-02T23:39:17.930Z",
       "rankDate": "",
-      "documentedPicks": 152,
-      "popularity": 1089,
-      "scorecardCount": 151,
+      "documentedPicks": 154,
+      "popularity": 1090,
+      "scorecardCount": 152,
       "features": ["Unguttable"],
       "flags": []
     },
@@ -2732,7 +2733,7 @@
       "updatedAt": "2026-07-10T01:46:57.721Z",
       "rankDate": "",
       "documentedPicks": 12,
-      "popularity": 34,
+      "popularity": 35,
       "scorecardCount": 12,
       "features": [],
       "flags": []
@@ -2827,7 +2828,7 @@
       "updatedAt": "2026-08-12T21:16:13.420Z",
       "rankDate": "",
       "documentedPicks": 4,
-      "popularity": 19,
+      "popularity": 20,
       "scorecardCount": 4,
       "features": [],
       "flags": []
@@ -3705,7 +3706,7 @@
       "updatedAt": "2025-12-02T23:39:17.932Z",
       "rankDate": "",
       "documentedPicks": 6,
-      "popularity": 77,
+      "popularity": 78,
       "scorecardCount": 6,
       "features": [],
       "flags": []
@@ -3784,7 +3785,7 @@
       "updatedAt": "2025-12-02T23:39:17.932Z",
       "rankDate": "",
       "documentedPicks": 13,
-      "popularity": 112,
+      "popularity": 113,
       "scorecardCount": 13,
       "features": ["Unguttable"],
       "flags": []
@@ -3816,7 +3817,7 @@
       "updatedAt": "2026-09-02T16:06:38.235Z",
       "rankDate": "",
       "documentedPicks": 150,
-      "popularity": 1061,
+      "popularity": 1062,
       "scorecardCount": 150,
       "features": [],
       "flags": ["Picking Risk"]
@@ -3833,7 +3834,7 @@
       "rankDate": "",
       "documentedPicks": 20,
       "popularity": 160,
-      "scorecardCount": 19,
+      "scorecardCount": 20,
       "features": ["Unguttable"],
       "flags": []
     },
@@ -4165,7 +4166,7 @@
       "updatedAt": "2025-12-02T23:39:17.933Z",
       "rankDate": "",
       "documentedPicks": 39,
-      "popularity": 381,
+      "popularity": 382,
       "scorecardCount": 39,
       "features": ["Unguttable"],
       "flags": []
@@ -4181,7 +4182,7 @@
       "updatedAt": "2025-12-02T23:39:17.933Z",
       "rankDate": "",
       "documentedPicks": 22,
-      "popularity": 143,
+      "popularity": 144,
       "scorecardCount": 22,
       "features": ["Unguttable"],
       "flags": []
@@ -4196,9 +4197,9 @@
       "addedAt": "2023-02-21T23:16:05.000Z",
       "updatedAt": "2025-12-02T23:39:17.933Z",
       "rankDate": "",
-      "documentedPicks": 286,
-      "popularity": 1458,
-      "scorecardCount": 282,
+      "documentedPicks": 287,
+      "popularity": 1461,
+      "scorecardCount": 283,
       "features": [],
       "flags": []
     },
@@ -4388,7 +4389,7 @@
       "updatedAt": "2025-12-02T23:39:17.934Z",
       "rankDate": "",
       "documentedPicks": 0,
-      "popularity": 2,
+      "popularity": 3,
       "features": [],
       "flags": []
     },
@@ -4499,7 +4500,7 @@
       "updatedAt": "2026-04-29T19:34:22.715Z",
       "rankDate": "",
       "documentedPicks": 6,
-      "popularity": 19,
+      "popularity": 20,
       "scorecardCount": 6,
       "features": [],
       "flags": []
@@ -5114,7 +5115,7 @@
       "updatedAt": "2026-09-18T17:33:33.527Z",
       "rankDate": "",
       "documentedPicks": 2,
-      "popularity": 14,
+      "popularity": 15,
       "scorecardCount": 2,
       "features": [],
       "flags": []
@@ -5222,7 +5223,7 @@
       "updatedAt": "2026-09-02T03:20:33.415Z",
       "rankDate": "",
       "documentedPicks": 1,
-      "popularity": 4,
+      "popularity": 5,
       "scorecardCount": 1,
       "features": [],
       "flags": []
@@ -5396,7 +5397,7 @@
       "updatedAt": "2026-09-02T03:20:33.415Z",
       "rankDate": "",
       "documentedPicks": 7,
-      "popularity": 58,
+      "popularity": 59,
       "scorecardCount": 7,
       "features": [],
       "flags": []
@@ -5950,7 +5951,7 @@
       "updatedAt": "2025-12-02T23:39:17.937Z",
       "rankDate": "",
       "documentedPicks": 15,
-      "popularity": 73,
+      "popularity": 74,
       "scorecardCount": 14,
       "features": [],
       "flags": []
@@ -6473,7 +6474,7 @@
       "updatedAt": "2025-12-02T23:39:17.938Z",
       "rankDate": "",
       "documentedPicks": 9,
-      "popularity": 24,
+      "popularity": 26,
       "scorecardCount": 9,
       "features": [],
       "flags": []
@@ -6713,7 +6714,7 @@
       "rankDate": "",
       "documentedPicks": 15,
       "popularity": 24,
-      "scorecardCount": 14,
+      "scorecardCount": 15,
       "features": [],
       "flags": []
     },
@@ -7061,7 +7062,7 @@
       "updatedAt": "2025-12-02T23:39:17.939Z",
       "rankDate": "",
       "documentedPicks": 3,
-      "popularity": 25,
+      "popularity": 27,
       "scorecardCount": 3,
       "features": [],
       "flags": []
@@ -7126,7 +7127,7 @@
       "rankDate": "",
       "documentedPicks": 22,
       "popularity": 66,
-      "scorecardCount": 21,
+      "scorecardCount": 22,
       "features": ["Magic DOM drivers"],
       "flags": []
     },
@@ -7174,7 +7175,7 @@
       "rankDate": "",
       "documentedPicks": 2,
       "popularity": 8,
-      "scorecardCount": 1,
+      "scorecardCount": 2,
       "features": [],
       "flags": []
     },
@@ -7302,7 +7303,7 @@
       "rankDate": "",
       "documentedPicks": 9,
       "popularity": 38,
-      "scorecardCount": 8,
+      "scorecardCount": 9,
       "features": ["Trap element"],
       "flags": []
     },
@@ -7537,7 +7538,7 @@
       "updatedAt": "2025-12-02T23:39:17.941Z",
       "rankDate": "",
       "documentedPicks": 14,
-      "popularity": 20,
+      "popularity": 22,
       "scorecardCount": 14,
       "features": [],
       "flags": []
@@ -7790,7 +7791,7 @@
       "updatedAt": "2025-12-02T23:39:17.941Z",
       "rankDate": "",
       "documentedPicks": 100,
-      "popularity": 246,
+      "popularity": 247,
       "scorecardCount": 97,
       "features": [],
       "flags": []
@@ -7998,7 +7999,7 @@
       "updatedAt": "2025-12-02T23:39:17.942Z",
       "rankDate": "",
       "documentedPicks": 8,
-      "popularity": 9,
+      "popularity": 10,
       "scorecardCount": 8,
       "features": [],
       "flags": []
@@ -8014,7 +8015,7 @@
       "updatedAt": "2026-11-12T23:11:40.146Z",
       "rankDate": "2026-10-29T17:06:32.291Z",
       "documentedPicks": 3,
-      "popularity": 1,
+      "popularity": 2,
       "scorecardCount": 3,
       "features": [],
       "flags": []
@@ -8078,8 +8079,8 @@
       "updatedAt": "2025-12-02T23:39:17.942Z",
       "rankDate": "",
       "documentedPicks": 17,
-      "popularity": 62,
-      "scorecardCount": 16,
+      "popularity": 63,
+      "scorecardCount": 17,
       "features": ["Pin-in-pin"],
       "flags": []
     },
@@ -8174,8 +8175,8 @@
       "updatedAt": "2026-10-29T17:06:32.739Z",
       "rankDate": "2026-10-29T17:06:32.292Z",
       "documentedPicks": 3,
-      "popularity": 1,
-      "scorecardCount": 2,
+      "popularity": 2,
+      "scorecardCount": 3,
       "features": [],
       "flags": []
     },
@@ -8206,7 +8207,7 @@
       "updatedAt": "2025-12-02T23:39:17.942Z",
       "rankDate": "",
       "documentedPicks": 234,
-      "popularity": 820,
+      "popularity": 822,
       "scorecardCount": 231,
       "features": [],
       "flags": []
@@ -8286,7 +8287,7 @@
       "rankDate": "",
       "documentedPicks": 5,
       "popularity": 8,
-      "scorecardCount": 4,
+      "scorecardCount": 5,
       "features": ["High pin count"],
       "flags": []
     },
@@ -8811,8 +8812,8 @@
       "updatedAt": "2026-09-02T04:08:49.026Z",
       "rankDate": "",
       "documentedPicks": 82,
-      "popularity": 219,
-      "scorecardCount": 81,
+      "popularity": 221,
+      "scorecardCount": 82,
       "features": ["Barrel drivers", "Serrated/threaded milling"],
       "flags": []
     },
@@ -8971,7 +8972,7 @@
       "rankDate": "",
       "documentedPicks": 34,
       "popularity": 83,
-      "scorecardCount": 33,
+      "scorecardCount": 34,
       "features": ["Unguttable"],
       "flags": []
     },
@@ -9066,7 +9067,7 @@
       "updatedAt": "2026-10-29T17:06:32.740Z",
       "rankDate": "2026-10-29T17:06:32.292Z",
       "documentedPicks": 0,
-      "popularity": 3,
+      "popularity": 4,
       "scorecardCount": 2,
       "features": [],
       "flags": []
@@ -9339,7 +9340,7 @@
       "rankDate": "",
       "documentedPicks": 9,
       "popularity": 11,
-      "scorecardCount": 8,
+      "scorecardCount": 9,
       "features": [],
       "flags": []
     },
@@ -9354,8 +9355,8 @@
       "updatedAt": "2025-12-02T23:39:17.945Z",
       "rankDate": "",
       "documentedPicks": 29,
-      "popularity": 55,
-      "scorecardCount": 28,
+      "popularity": 56,
+      "scorecardCount": 29,
       "features": ["Trap element", "False gates", "Active sidebar"],
       "flags": []
     },
@@ -9418,7 +9419,7 @@
       "rankDate": "",
       "documentedPicks": 42,
       "popularity": 77,
-      "scorecardCount": 41,
+      "scorecardCount": 42,
       "features": ["Overmilling"],
       "flags": []
     },
@@ -9545,7 +9546,7 @@
       "updatedAt": "2026-04-28T18:31:50.353Z",
       "rankDate": "",
       "documentedPicks": 4,
-      "popularity": 28,
+      "popularity": 29,
       "scorecardCount": 4,
       "features": [],
       "flags": ["Under Review ⚑"]
@@ -9578,7 +9579,7 @@
       "rankDate": "",
       "documentedPicks": 16,
       "popularity": 45,
-      "scorecardCount": 15,
+      "scorecardCount": 16,
       "features": [],
       "flags": []
     },
@@ -9642,7 +9643,7 @@
       "rankDate": "",
       "documentedPicks": 14,
       "popularity": 25,
-      "scorecardCount": 13,
+      "scorecardCount": 14,
       "features": [],
       "flags": []
     },
@@ -9894,7 +9895,7 @@
       "updatedAt": "2026-09-02T03:20:33.419Z",
       "rankDate": "2026-08-30T12:00:00.000Z",
       "documentedPicks": 3,
-      "popularity": 4,
+      "popularity": 5,
       "scorecardCount": 3,
       "features": ["Sprung Sliders", "Active sidebar"],
       "flags": []
@@ -9991,7 +9992,7 @@
       "rankDate": "",
       "documentedPicks": 22,
       "popularity": 44,
-      "scorecardCount": 21,
+      "scorecardCount": 22,
       "features": ["Magnetic sliders"],
       "flags": []
     },
@@ -10087,7 +10088,7 @@
       "rankDate": "",
       "documentedPicks": 6,
       "popularity": 56,
-      "scorecardCount": 7,
+      "scorecardCount": 6,
       "features": ["Pin-in-pin", "Interactive element"],
       "flags": []
     },
@@ -10119,7 +10120,7 @@
       "rankDate": "",
       "documentedPicks": 140,
       "popularity": 247,
-      "scorecardCount": 124,
+      "scorecardCount": 125,
       "features": ["Pin-in-pin", "Interactive element"],
       "flags": []
     },
@@ -10166,8 +10167,8 @@
       "updatedAt": "2025-12-02T23:39:17.947Z",
       "rankDate": "",
       "documentedPicks": 3,
-      "popularity": 2,
-      "scorecardCount": 2,
+      "popularity": 3,
+      "scorecardCount": 3,
       "features": ["High pin count"],
       "flags": []
     },
@@ -10247,7 +10248,7 @@
       "rankDate": "",
       "documentedPicks": 11,
       "popularity": 15,
-      "scorecardCount": 10,
+      "scorecardCount": 11,
       "features": [],
       "flags": []
     },
@@ -10263,7 +10264,7 @@
       "rankDate": "2026-10-29T17:06:32.294Z",
       "documentedPicks": 4,
       "popularity": 4,
-      "scorecardCount": 3,
+      "scorecardCount": 4,
       "features": [],
       "flags": ["Under Review ⚑"]
     },
@@ -10422,7 +10423,7 @@
       "rankDate": "",
       "documentedPicks": 28,
       "popularity": 37,
-      "scorecardCount": 27,
+      "scorecardCount": 28,
       "features": ["High pin count"],
       "flags": []
     },
@@ -10629,8 +10630,8 @@
       "updatedAt": "2025-12-02T23:39:17.949Z",
       "rankDate": "",
       "documentedPicks": 33,
-      "popularity": 182,
-      "scorecardCount": 32,
+      "popularity": 183,
+      "scorecardCount": 33,
       "features": ["Rear tension", "False gates"],
       "flags": []
     },
@@ -10889,7 +10890,7 @@
       "updatedAt": "2025-12-02T23:39:17.950Z",
       "rankDate": "",
       "documentedPicks": 3,
-      "popularity": 25,
+      "popularity": 26,
       "scorecardCount": 3,
       "features": ["False gates", "Sprung sliders", "Active sidebar"],
       "flags": []
@@ -11080,7 +11081,7 @@
       "updatedAt": "2025-12-02T23:39:17.950Z",
       "rankDate": "",
       "documentedPicks": 23,
-      "popularity": 35,
+      "popularity": 36,
       "scorecardCount": 23,
       "features": ["Torpedo keypins"],
       "flags": []
@@ -11159,7 +11160,7 @@
       "updatedAt": "2025-12-02T23:39:17.951Z",
       "rankDate": "",
       "documentedPicks": 1,
-      "popularity": 13,
+      "popularity": 14,
       "scorecardCount": 1,
       "features": ["False gates", "Active sidebar"],
       "flags": []
@@ -11175,7 +11176,7 @@
       "updatedAt": "2025-12-02T23:39:17.951Z",
       "rankDate": "",
       "documentedPicks": 11,
-      "popularity": 19,
+      "popularity": 20,
       "scorecardCount": 11,
       "features": [],
       "flags": []
@@ -11303,8 +11304,8 @@
       "updatedAt": "2025-12-02T23:39:17.951Z",
       "rankDate": "",
       "documentedPicks": 95,
-      "popularity": 165,
-      "scorecardCount": 93,
+      "popularity": 166,
+      "scorecardCount": 94,
       "features": ["Overmilling", "Torpedo keypins", "High pin count"],
       "flags": []
     },
@@ -11510,8 +11511,8 @@
       "updatedAt": "2025-12-02T23:39:17.952Z",
       "rankDate": "",
       "documentedPicks": 17,
-      "popularity": 48,
-      "scorecardCount": 16,
+      "popularity": 49,
+      "scorecardCount": 17,
       "features": ["High pin count"],
       "flags": []
     },
@@ -11762,8 +11763,8 @@
       "addedAt": "2023-02-21T23:16:05.000Z",
       "updatedAt": "2026-08-14T02:13:20.785Z",
       "rankDate": "",
-      "documentedPicks": 80,
-      "popularity": 157,
+      "documentedPicks": 81,
+      "popularity": 158,
       "scorecardCount": 80,
       "features": ["Pin-in-pin"],
       "flags": []
@@ -11780,7 +11781,7 @@
       "rankDate": "",
       "documentedPicks": 15,
       "popularity": 22,
-      "scorecardCount": 14,
+      "scorecardCount": 15,
       "features": [],
       "flags": []
     },
@@ -12088,7 +12089,7 @@
       "updatedAt": "2025-12-02T23:39:17.954Z",
       "rankDate": "",
       "documentedPicks": 12,
-      "popularity": 37,
+      "popularity": 38,
       "scorecardCount": 12,
       "features": [],
       "flags": []
@@ -12141,7 +12142,7 @@
       "updatedAt": "2025-12-02T23:39:17.954Z",
       "rankDate": "",
       "documentedPicks": 4,
-      "popularity": 24,
+      "popularity": 25,
       "scorecardCount": 4,
       "features": ["False gates", "Sprung sliders", "Active sidebar"],
       "flags": []
@@ -12221,8 +12222,8 @@
       "updatedAt": "2025-12-02T23:39:17.954Z",
       "rankDate": "",
       "documentedPicks": 3,
-      "popularity": 4,
-      "scorecardCount": 2,
+      "popularity": 5,
+      "scorecardCount": 3,
       "features": [],
       "flags": []
     },
@@ -12301,7 +12302,7 @@
       "updatedAt": "2025-12-28T18:08:45.113Z",
       "rankDate": "",
       "documentedPicks": 39,
-      "popularity": 72,
+      "popularity": 73,
       "scorecardCount": 39,
       "features": ["Magic DOM drivers", "Sidepins", "Torpedo keypins"],
       "flags": []
@@ -12382,7 +12383,7 @@
       "rankDate": "",
       "documentedPicks": 10,
       "popularity": 12,
-      "scorecardCount": 9,
+      "scorecardCount": 10,
       "features": [],
       "flags": []
     },
@@ -12461,7 +12462,7 @@
       "updatedAt": "2026-09-02T03:20:33.423Z",
       "rankDate": "",
       "documentedPicks": 13,
-      "popularity": 45,
+      "popularity": 46,
       "scorecardCount": 13,
       "features": ["Gin spool drivers", "Overmilling", "Undercut milling"],
       "flags": []
@@ -12477,7 +12478,7 @@
       "updatedAt": "2025-12-02T23:39:17.955Z",
       "rankDate": "",
       "documentedPicks": 6,
-      "popularity": 3,
+      "popularity": 4,
       "scorecardCount": 6,
       "features": [],
       "flags": []
@@ -12589,7 +12590,7 @@
       "updatedAt": "2025-12-02T23:39:17.955Z",
       "rankDate": "",
       "documentedPicks": 3,
-      "popularity": 23,
+      "popularity": 24,
       "scorecardCount": 3,
       "features": ["High pin count"],
       "flags": []
@@ -12940,7 +12941,7 @@
       "rankDate": "",
       "documentedPicks": 43,
       "popularity": 84,
-      "scorecardCount": 42,
+      "scorecardCount": 43,
       "features": ["Barrel drivers", "Serrated/threaded milling", "Sidepins", "Active sidebar"],
       "flags": []
     },
@@ -13391,8 +13392,8 @@
       "updatedAt": "2026-08-08T17:37:39.302Z",
       "rankDate": "",
       "documentedPicks": 25,
-      "popularity": 46,
-      "scorecardCount": 21,
+      "popularity": 47,
+      "scorecardCount": 22,
       "features": [
         "Rotating fingerpins",
         "Active sidebar",
@@ -13443,9 +13444,9 @@
       "addedAt": "2023-02-21T23:16:05.000Z",
       "updatedAt": "2026-07-10T01:46:57.731Z",
       "rankDate": "",
-      "documentedPicks": 79,
+      "documentedPicks": 80,
       "popularity": 102,
-      "scorecardCount": 66,
+      "scorecardCount": 67,
       "features": ["Barrel drivers", "Serrated/threaded milling", "Active sidebar", "Sidepins"],
       "flags": []
     },
@@ -14114,8 +14115,8 @@
       "updatedAt": "2025-12-02T23:39:17.961Z",
       "rankDate": "",
       "documentedPicks": 20,
-      "popularity": 28,
-      "scorecardCount": 19,
+      "popularity": 29,
+      "scorecardCount": 20,
       "features": ["Sidepins", "Active sidebar", "Barrel drivers", "Serrated/threaded milling"],
       "flags": []
     },
@@ -14131,7 +14132,7 @@
       "rankDate": "",
       "documentedPicks": 31,
       "popularity": 58,
-      "scorecardCount": 27,
+      "scorecardCount": 28,
       "features": ["High pin count"],
       "flags": []
     },
@@ -14210,7 +14211,7 @@
       "updatedAt": "2025-12-02T23:39:17.961Z",
       "rankDate": "",
       "documentedPicks": 11,
-      "popularity": 32,
+      "popularity": 33,
       "scorecardCount": 11,
       "features": ["High pin count"],
       "flags": []
@@ -14258,8 +14259,8 @@
       "updatedAt": "2026-08-07T00:30:27.164Z",
       "rankDate": "",
       "documentedPicks": 10,
-      "popularity": 22,
-      "scorecardCount": 9,
+      "popularity": 23,
+      "scorecardCount": 10,
       "features": ["High pin count"],
       "flags": []
     },
@@ -14958,7 +14959,7 @@
       "updatedAt": "2026-10-12T23:33:54.535Z",
       "rankDate": "2026-10-12T23:33:54.097Z",
       "documentedPicks": 0,
-      "popularity": 0,
+      "popularity": 1,
       "features": [],
       "flags": []
     },
@@ -15082,7 +15083,7 @@
       "updatedAt": "2026-10-09T16:14:04.140Z",
       "rankDate": "2026-10-09T16:14:03.523Z",
       "documentedPicks": 0,
-      "popularity": 1,
+      "popularity": 2,
       "features": [],
       "flags": []
     },
@@ -15617,7 +15618,7 @@
       "updatedAt": "2026-10-10T01:23:33.879Z",
       "rankDate": "2026-10-10T01:23:33.360Z",
       "documentedPicks": 0,
-      "popularity": 1,
+      "popularity": 2,
       "features": [],
       "flags": []
     },
@@ -15951,7 +15952,7 @@
       "updatedAt": "2026-10-12T23:33:54.537Z",
       "rankDate": "2026-10-12T23:33:54.099Z",
       "documentedPicks": 0,
-      "popularity": 1,
+      "popularity": 2,
       "features": [],
       "flags": []
     },
@@ -16773,7 +16774,8 @@
       "updatedAt": "2026-10-12T23:33:54.541Z",
       "rankDate": "2026-10-12T23:33:54.101Z",
       "documentedPicks": 0,
-      "popularity": 0,
+      "popularity": 1,
+      "scorecardCount": 1,
       "features": [],
       "flags": []
     },
@@ -16788,7 +16790,8 @@
       "updatedAt": "2026-10-12T23:33:54.541Z",
       "rankDate": "2026-10-12T23:33:54.101Z",
       "documentedPicks": 1,
-      "popularity": 2,
+      "popularity": 3,
+      "scorecardCount": 1,
       "features": [],
       "flags": []
     },
@@ -17199,7 +17202,7 @@
       "updatedAt": "2026-10-12T23:33:54.542Z",
       "rankDate": "2026-10-12T23:33:54.102Z",
       "documentedPicks": 0,
-      "popularity": 1,
+      "popularity": 2,
       "features": [],
       "flags": []
     },
@@ -17214,7 +17217,7 @@
       "updatedAt": "2026-10-12T23:33:54.542Z",
       "rankDate": "2026-10-12T23:33:54.102Z",
       "documentedPicks": 0,
-      "popularity": 1,
+      "popularity": 2,
       "features": [],
       "flags": []
     },
@@ -17244,7 +17247,7 @@
       "updatedAt": "2026-10-12T23:33:54.542Z",
       "rankDate": "2026-10-12T23:33:54.102Z",
       "documentedPicks": 0,
-      "popularity": 1,
+      "popularity": 2,
       "features": [],
       "flags": []
     },
@@ -17472,7 +17475,7 @@
       "updatedAt": "2026-10-03T22:57:35.476Z",
       "rankDate": "",
       "documentedPicks": 0,
-      "popularity": 1,
+      "popularity": 2,
       "features": [],
       "flags": []
     },
@@ -17487,7 +17490,7 @@
       "updatedAt": "2026-10-12T23:33:54.544Z",
       "rankDate": "2026-10-12T23:33:54.102Z",
       "documentedPicks": 0,
-      "popularity": 1,
+      "popularity": 2,
       "features": [],
       "flags": []
     },
@@ -17824,7 +17827,7 @@
       "updatedAt": "2026-10-12T23:33:54.545Z",
       "rankDate": "2026-10-12T23:33:54.103Z",
       "documentedPicks": 1,
-      "popularity": 1,
+      "popularity": 2,
       "scorecardCount": 1,
       "features": [],
       "flags": []
@@ -18158,7 +18161,7 @@
       "updatedAt": "2026-10-12T23:33:54.546Z",
       "rankDate": "2026-10-12T23:33:54.103Z",
       "documentedPicks": 1,
-      "popularity": 2,
+      "popularity": 3,
       "scorecardCount": 1,
       "features": [],
       "flags": []
@@ -18651,7 +18654,7 @@
       "updatedAt": "2026-10-12T23:33:54.548Z",
       "rankDate": "2026-10-12T23:33:54.104Z",
       "documentedPicks": 0,
-      "popularity": 1,
+      "popularity": 2,
       "features": [],
       "flags": []
     },
@@ -19530,7 +19533,7 @@
   ],
   "memberBelts": [
     { "platform": "Discord", "counts": [424, 770, 1468, 731, 364, 168, 112, 77, 193] },
-    { "platform": "Reddit", "counts": [1333, 2348, 3239, 1227, 436, 178, 105, 73, 155] }
+    { "platform": "Reddit", "counts": [1336, 2348, 3238, 1228, 436, 178, 105, 73, 155] }
   ],
   "sources": {
     "stats": "https://assets.lpubelts.com/data/collectionStatsCurrent.json",
