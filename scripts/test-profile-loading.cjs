@@ -58,7 +58,11 @@ const url = `https://test.chatgpt.site/api/lpu-profile?url=${encodeURIComponent(
         data: {
           userId: id,
           displayName: "Test profile",
-          collections: { own: ["owned"], wishlist: ["wish"], picked: ["owned"] },
+          collections: {
+            own: ["owned", "missing-owned"],
+            wishlist: ["wish", "missing-wish"],
+            picked: ["owned", "missing-owned"],
+          },
         },
       });
     assert(url.includes("/main/apps/web/src/data/data.json"));
@@ -69,11 +73,44 @@ const url = `https://test.chatgpt.site/api/lpu-profile?url=${encodeURIComponent(
   assert.equal(response.status, 200);
   const result = await response.json();
   assert.equal(result.profile.locks.length, 2);
+  assert.equal(result.profile.locks.find((lock) => lock.id === "wish").status, "Wishlist");
   assert(result.profile.locks.find((lock) => lock.id === "owned").picked);
   assert.equal(result.profile.locks.find((lock) => lock.id === "owned").beltLevel, "Black 5");
   const repeated = await profileRoute.GET(new Request(url));
   assert.equal(repeated.status, 200);
   assert.equal(calls.length, 2, "Successful profile/catalog requests are coalesced and cached");
+  // Exercise the GitHub Pages loader itself with a mixed known/unknown catalog.
+  const pageSource = fs.readFileSync(path.join(root, "app/page.tsx"), "utf8");
+  const pageAst = ts.createSourceFile("page.tsx", pageSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const loader = pageAst.statements.find(
+    (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === "fetchLpuProfileFromGithubPages",
+  );
+  assert(loader, "GitHub Pages profile loader exists");
+  const loaderCode = ts.transpileModule(`${loader.getText(pageAst)}\nmodule.exports = fetchLpuProfileFromGithubPages;`, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const clientModule = { exports: {} };
+  const collections = { own: ["owned", "missing-owned"], wishlist: ["wish", "missing-wish"], picked: ["owned", "missing-owned"] };
+  const clientContext = {
+    module: clientModule, URL, URLSearchParams, Set, Date, Error,
+    fetchLpuUser: async () => Response.json({ data: { userId: id, displayName: "Test profile", collections } }),
+    getProfileCatalog: async () => catalog,
+    stringIds: (ids) => [...new Set(ids)],
+    profileCollections: (value) => value,
+    normalizeBelt: (belt) => ({ belt }),
+    formatNewYorkSnapshot: () => "test timestamp",
+    LpuRateLimitError: class extends Error {},
+  };
+  vm.runInNewContext(loaderCode, clientContext);
+  const clientProfile = await clientModule.exports(`https://lpubelts.com/#/profile/${id}`);
+  assert.equal(clientProfile.locks.length, 2);
+  assert.equal(clientProfile.locks.find((lock) => lock.id === "owned").picked, true);
+  assert.equal(clientProfile.locks.find((lock) => lock.id === "wish").status, "Wishlist");
+  assert.equal(clientProfile.collections.own.length, 2, "Original collection IDs are retained");
+  clientContext.getProfileCatalog = async () => [];
+  assert.equal((await clientModule.exports(`https://lpubelts.com/#/profile/${id}`)).locks.length, 0);
+  clientContext.fetchLpuUser = async () => Response.json({ data: { userId: id, collections: { own: [] } } });
+  await assert.rejects(clientModule.exports(`https://lpubelts.com/#/profile/${id}`), /incomplete collection data/);
   assert.equal(
     (await profileRoute.GET(new Request(url, { headers: { Origin: "https://untrusted.example" } })))
       .status,

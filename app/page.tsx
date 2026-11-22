@@ -339,8 +339,6 @@ async function fetchLpuProfileFromGithubPages(profileUrl: string): Promise<Loade
   const selectedIds = new Set([...ownedIds, ...wishlistIds]);
   const catalog = await getProfileCatalog();
   const selected = catalog.filter((entry) => selectedIds.has(entry.id));
-  if (selected.length !== selectedIds.size)
-    throw new Error("The profile references locks missing from the LPU catalog.");
 
   const fallbackName = new URLSearchParams(parsed.hash.split("?")[1] || "").get("name")?.trim();
   return {

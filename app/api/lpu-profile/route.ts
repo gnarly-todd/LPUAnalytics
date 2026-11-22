@@ -265,13 +265,6 @@ export async function GET(request: Request) {
     const selectedIds = new Set([...ownedIds, ...wishlistIds]);
     const selectedEntries = catalog.filter((entry) => selectedIds.has(entry.id));
 
-    if (selectedEntries.length !== selectedIds.size) {
-      return reply(
-        { message: "The profile references locks missing from the current LPU catalog." },
-        409,
-      );
-    }
-
     const locks: LockRecord[] = selectedEntries.map((entry) => {
       const normalized = normalizeBelt(entry.belt);
       return {
